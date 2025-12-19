@@ -1,6 +1,6 @@
 FROM composer:latest as composer_builder
 
-FROM dunglas/frankenphp:php8.2.29-bookworm
+FROM dunglas/frankenphp:php8.3-bookworm
 
 # Install required PHP extensions
 RUN install-php-extensions intl zip ctype curl dom fileinfo filter hash mbstring openssl pcre pdo session tokenizer xml
