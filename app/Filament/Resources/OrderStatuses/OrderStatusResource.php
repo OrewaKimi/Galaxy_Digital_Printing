@@ -6,6 +6,7 @@ use App\Filament\Resources\OrderStatuses\Pages\ManageOrderStatuses;
 use App\Models\OrderStatus;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -14,6 +15,7 @@ use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\ColorPicker;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
@@ -22,8 +24,10 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\ColorColumn;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -39,26 +43,57 @@ class OrderStatusResource extends Resource
     
     protected static string | UnitEnum | null $navigationGroup = 'Produksi';
 
+    protected static ?int $navigationSort = 42;
+
+    protected static ?string $navigationLabel = 'Status Order';
+
+    protected static ?string $modelLabel = 'Status Order';
+
+    protected static ?string $pluralModelLabel = 'Status Order';
+
+    protected static ?string $recordTitleAttribute = 'status_name';
+
     public static function form(Schema $schema): Schema
     {
         return $schema
             ->components([
                 TextInput::make('status_name')
-                    ->required(),
+                    ->label('Nama Status')
+                    ->required()
+                    ->maxLength(100)
+                    ->unique(ignoreRecord: true),
+                
                 TextInput::make('status_code')
-                    ->required(),
+                    ->label('Kode Status')
+                    ->required()
+                    ->maxLength(20)
+                    ->unique(ignoreRecord: true)
+                    ->alphaNum(),
+                
                 Textarea::make('description')
+                    ->label('Deskripsi')
+                    ->maxLength(65535)
+                    ->rows(3)
                     ->default(null)
                     ->columnSpanFull(),
-                TextInput::make('color')
+                
+                ColorPicker::make('color')
+                    ->label('Warna')
                     ->required()
-                    ->default('#000000'),
+                    ->default('#3B82F6'),
+                
                 TextInput::make('sequence_order')
+                    ->label('Urutan')
                     ->required()
                     ->numeric()
-                    ->default(0),
+                    ->minValue(0)
+                    ->default(0)
+                    ->helperText('Urutan status dalam alur order'),
+                
                 Toggle::make('is_active')
-                    ->required(),
+                    ->label('Aktif')
+                    ->default(true)
+                    ->inline(false),
             ]);
     }
 
@@ -87,30 +122,55 @@ class OrderStatusResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('status_name')
-                    ->searchable(),
+                    ->label('Nama Status')
+                    ->searchable()
+                    ->sortable()
+                    ->badge()
+                    ->color(fn ($record) => $record->color ?? 'gray'),
                 TextColumn::make('status_code')
-                    ->searchable(),
-                TextColumn::make('color')
-                    ->searchable(),
+                    ->label('Kode')
+                    ->searchable()
+                    ->sortable()
+                    ->badge()
+                    ->color('info'),
                 TextColumn::make('sequence_order')
+                    ->label('Urutan')
                     ->numeric()
+                    ->sortable()
+                    ->badge()
+                    ->color('warning'),
+                ColorColumn::make('color')
+                    ->label('Warna')
                     ->sortable(),
+                TextColumn::make('description')
+                    ->label('Deskripsi')
+                    ->limit(50)
+                    ->tooltip(fn ($record) => $record->description)
+                    ->placeholder('-')
+                    ->toggleable(),
                 IconColumn::make('is_active')
-                    ->boolean(),
+                    ->label('Aktif')
+                    ->boolean()
+                    ->sortable(),
                 TextColumn::make('created_at')
-                    ->dateTime()
+                    ->label('Dibuat')
+                    ->dateTime('d M Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('deleted_at')
-                    ->dateTime()
+                    ->label('Diperbarui')
+                    ->dateTime('d M Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('sequence_order', 'asc')
             ->filters([
+                TernaryFilter::make('is_active')
+                    ->label('Status')
+                    ->placeholder('Semua Status')
+                    ->trueLabel('Hanya Aktif')
+                    ->falseLabel('Hanya Nonaktif')
+                    ->native(false),
                 TrashedFilter::make(),
             ])
             ->recordActions([
@@ -121,6 +181,8 @@ class OrderStatusResource extends Resource
                 RestoreAction::make(),
             ])
             ->toolbarActions([
+                CreateAction::make()
+                    ->label('Tambah Status Order'),
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                     ForceDeleteBulkAction::make(),

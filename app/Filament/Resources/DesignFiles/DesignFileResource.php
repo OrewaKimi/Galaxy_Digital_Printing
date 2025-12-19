@@ -2,10 +2,13 @@
 
 namespace App\Filament\Resources\DesignFiles;
 
+use App\Enums\FileCategory;
 use App\Filament\Resources\DesignFiles\Pages\ManageDesignFiles;
 use App\Models\DesignFile;
+use App\Models\User;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -15,6 +18,7 @@ use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
@@ -26,6 +30,8 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -40,55 +46,121 @@ class DesignFileResource extends Resource
 
     protected static string | UnitEnum | null $navigationGroup = 'Produk & Material';
 
+    protected static ?int $navigationSort = 23;
+
+    protected static ?string $navigationLabel = 'File Desain';
+
+    protected static ?string $modelLabel = 'File Desain';
+
+    protected static ?string $pluralModelLabel = 'File Desain';
+
+    protected static ?string $recordTitleAttribute = 'file_name';
+
     public static function form(Schema $schema): Schema
     {
         return $schema
             ->components([
-                TextInput::make('order_id')
-                    ->required()
-                    ->numeric(),
-                TextInput::make('item_id')
-                    ->numeric()
+                Select::make('order_id')
+                    ->label('Order')
+                    ->relationship('order', 'order_number')
+                    ->searchable()
+                    ->preload()
+                    ->required(),
+                
+                Select::make('item_id')
+                    ->label('Item Order')
+                    ->relationship('item', 'id')
+                    ->searchable()
+                    ->preload()
                     ->default(null),
+                
+                FileUpload::make('file_path')
+                    ->label('File')
+                    ->disk('public')
+                    ->directory('design-files')
+                    ->preserveFilenames()
+                    ->acceptedFileTypes(['image/*', 'application/pdf', 'application/zip'])
+                    ->maxSize(51200)
+                    ->required()
+                    ->columnSpanFull(),
+                
                 TextInput::make('file_name')
-                    ->required(),
-                TextInput::make('file_path')
-                    ->required(),
-                TextInput::make('file_size')
-                    ->default(null),
-                TextInput::make('file_type')
-                    ->default(null),
-                TextInput::make('mime_type')
-                    ->default(null),
+                    ->label('Nama File')
+                    ->required()
+                    ->maxLength(255),
+                
                 Select::make('file_category')
-                    ->options([
-            'customer_upload' => 'Customer upload',
-            'designer_draft' => 'Designer draft',
-            'final_design' => 'Final design',
-            'revision' => 'Revision',
-            'reference' => 'Reference',
-        ])
-                    ->default('customer_upload')
-                    ->required(),
+                    ->label('Kategori File')
+                    ->options(FileCategory::options())
+                    ->default(FileCategory::CUSTOMER_UPLOAD->value)
+                    ->required()
+                    ->native(false),
+                
                 TextInput::make('version')
+                    ->label('Versi')
                     ->required()
                     ->numeric()
+                    ->minValue(1)
                     ->default(1),
-                TextInput::make('uploaded_by')
-                    ->required()
-                    ->numeric(),
-                DateTimePicker::make('uploaded_date')
-                    ->required(),
-                Toggle::make('is_approved')
-                    ->required(),
-                TextInput::make('approved_by')
+                
+                TextInput::make('file_size')
+                    ->label('Ukuran File (KB)')
                     ->numeric()
+                    ->suffix('KB')
                     ->default(null),
-                DateTimePicker::make('approved_date'),
+                
+                TextInput::make('file_type')
+                    ->label('Tipe File')
+                    ->maxLength(50)
+                    ->default(null),
+                
+                TextInput::make('mime_type')
+                    ->label('MIME Type')
+                    ->maxLength(100)
+                    ->default(null),
+                
+                Select::make('uploaded_by')
+                    ->label('Diupload Oleh')
+                    ->relationship('uploader', 'full_name')
+                    ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name . ' (' . $record->email . ')')
+                    ->searchable(['full_name', 'email', 'username'])
+                    ->preload()
+                    ->required(),
+
+                DateTimePicker::make('uploaded_date')
+                    ->label('Tanggal Upload')
+                    ->required()
+                    ->default(now())
+                    ->native(false),
+                    
+                Toggle::make('is_approved')
+                    ->label('Sudah Disetujui')
+                    ->default(false)
+                    ->inline(false),
+
+                Select::make('approved_by')
+                    ->label('Disetujui Oleh')
+                    ->relationship('approver', 'full_name')
+                    ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name . ' (' . $record->email . ')')
+                    ->searchable(['full_name', 'email', 'username'])
+                    ->preload()
+                    ->default(null),
+
+                DateTimePicker::make('approved_date')
+                    ->label('Tanggal Disetujui')
+                    ->native(false),
+                    
                 Textarea::make('notes')
+                    ->label('Catatan')
+                    ->maxLength(65535)
+                    ->rows(3)
                     ->default(null)
                     ->columnSpanFull(),
+                    
                 Textarea::make('rejection_reason')
+                    ->label('Alasan Penolakan')
+                    ->maxLength(65535)
+                    ->rows(3)
                     ->default(null)
                     ->columnSpanFull(),
             ]);
@@ -99,32 +171,44 @@ class DesignFileResource extends Resource
         return $schema
             ->components([
                 TextEntry::make('order_id')
+                    ->label('Order ID')
                     ->numeric(),
                 TextEntry::make('item_id')
+                    ->label('Item ID')
                     ->numeric(),
-                TextEntry::make('file_name'),
-                TextEntry::make('file_path'),
-                TextEntry::make('file_size'),
-                TextEntry::make('file_type'),
-                TextEntry::make('mime_type'),
-                TextEntry::make('file_category'),
+                TextEntry::make('file_name')
+                    ->label('Nama File'),
+                TextEntry::make('file_path')
+                    ->label('Path File'),
+                TextEntry::make('file_size')
+                    ->label('Ukuran File'),
+                TextEntry::make('file_type')
+                    ->label('Tipe File'),
+                TextEntry::make('mime_type')
+                    ->label('MIME Type'),
+                TextEntry::make('file_category')
+                    ->label('Kategori'),
                 TextEntry::make('version')
+                    ->label('Versi')
                     ->numeric(),
-                TextEntry::make('uploaded_by')
-                    ->numeric(),
+                TextEntry::make('uploader.full_name')
+                    ->label('Diupload Oleh'),
                 TextEntry::make('uploaded_date')
+                    ->label('Tanggal Upload')
                     ->dateTime(),
                 IconEntry::make('is_approved')
+                    ->label('Disetujui')
                     ->boolean(),
-                TextEntry::make('approved_by')
-                    ->numeric(),
+                TextEntry::make('approver.full_name')
+                    ->label('Disetujui Oleh'),
                 TextEntry::make('approved_date')
+                    ->label('Tanggal Disetujui')
                     ->dateTime(),
                 TextEntry::make('created_at')
+                    ->label('Dibuat')
                     ->dateTime(),
                 TextEntry::make('updated_at')
-                    ->dateTime(),
-                TextEntry::make('deleted_at')
+                    ->label('Diperbarui')
                     ->dateTime(),
             ]);
     }
@@ -133,54 +217,68 @@ class DesignFileResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('order_id')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('item_id')
-                    ->numeric()
+                TextColumn::make('order.order_number')
+                    ->label('No. Order')
+                    ->searchable()
                     ->sortable(),
                 TextColumn::make('file_name')
-                    ->searchable(),
-                TextColumn::make('file_path')
-                    ->searchable(),
-                TextColumn::make('file_size')
-                    ->searchable(),
-                TextColumn::make('file_type')
-                    ->searchable(),
-                TextColumn::make('mime_type')
-                    ->searchable(),
-                TextColumn::make('file_category'),
+                    ->label('Nama File')
+                    ->searchable()
+                    ->limit(30)
+                    ->tooltip(fn ($record) => $record->file_name),
+                TextColumn::make('file_category')
+                    ->label('Kategori')
+                    ->badge()
+                    ->formatStateUsing(fn (string $state): string => FileCategory::from($state)->label())
+                    ->color(fn (string $state): string => match ($state) {
+                        'customer_upload' => 'info',
+                        'designer_draft' => 'warning',
+                        'final_design' => 'success',
+                        'revision' => 'danger',
+                        'reference' => 'gray',
+                        default => 'gray',
+                    })
+                    ->sortable(),
                 TextColumn::make('version')
+                    ->label('Ver.')
                     ->numeric()
                     ->sortable(),
-                TextColumn::make('uploaded_by')
-                    ->numeric()
+                TextColumn::make('uploader.full_name')
+                    ->label('Upload Oleh')
+                    ->searchable()
                     ->sortable(),
                 TextColumn::make('uploaded_date')
-                    ->dateTime()
+                    ->label('Tgl Upload')
+                    ->dateTime('d M Y H:i')
                     ->sortable(),
                 IconColumn::make('is_approved')
-                    ->boolean(),
-                TextColumn::make('approved_by')
-                    ->numeric()
+                    ->label('Disetujui')
+                    ->boolean()
                     ->sortable(),
-                TextColumn::make('approved_date')
-                    ->dateTime()
-                    ->sortable(),
-                TextColumn::make('created_at')
-                    ->dateTime()
+                TextColumn::make('approver.full_name')
+                    ->label('Disetujui Oleh')
+                    ->searchable()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('deleted_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: false),
             ])
+            ->defaultSort('uploaded_date', 'desc')
             ->filters([
+                SelectFilter::make('file_category')
+                    ->label('Kategori')
+                    ->options(FileCategory::options())
+                    ->native(false),
+                TernaryFilter::make('is_approved')
+                    ->label('Status Persetujuan')
+                    ->placeholder('Semua')
+                    ->trueLabel('Sudah Disetujui')
+                    ->falseLabel('Belum Disetujui')
+                    ->native(false),
+                SelectFilter::make('order_id')
+                    ->label('Order')
+                    ->relationship('order', 'order_number')
+                    ->searchable()
+                    ->preload(),
                 TrashedFilter::make(),
             ])
             ->recordActions([
@@ -191,6 +289,8 @@ class DesignFileResource extends Resource
                 RestoreAction::make(),
             ])
             ->toolbarActions([
+                CreateAction::make()
+                    ->label('Tambah File Desain'),
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                     ForceDeleteBulkAction::make(),

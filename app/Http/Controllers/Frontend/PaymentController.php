@@ -9,6 +9,8 @@ use App\Models\Payment;
 use Midtrans\Config;
 use Midtrans\Snap;
 use Midtrans\Notification;
+use Midtrans\Transaction;
+
 
 class PaymentController extends Controller
 {
@@ -119,7 +121,16 @@ class PaymentController extends Controller
                     'credit_card', 'bca_va', 'bni_va', 'bri_va', 
                     'permata_va', 'other_va', 'gopay', 'shopeepay'
                 ],
+                'callbacks' => [
+                    'finish' => url('/orders/' . $order->order_id),
+                ],
             ];
+
+            // Add notification URL if APP_URL is set
+            $appUrl = config('app.url');
+            if ($appUrl && $appUrl !== 'http://localhost') {
+                $params['callbacks']['notification'] = $appUrl . '/payment/midtrans/callback';
+            }
 
             // Get snap token
             $snapToken = Snap::getSnapToken($params);
@@ -141,6 +152,9 @@ class PaymentController extends Controller
     public function handleCallback(Request $request)
     {
         try {
+            \Log::info('=== Midtrans Callback Received (PaymentController) ===');
+            \Log::info('Request Data:', $request->all());
+            
             $this->initMidtrans();
             $notif = new Notification();
 
@@ -150,11 +164,21 @@ class PaymentController extends Controller
             $paymentType = $notif->payment_type;
             $transactionId = $notif->transaction_id;
 
+            \Log::info('Parsed Notification:', [
+                'order_id' => $orderId,
+                'transaction_status' => $transactionStatus,
+                'payment_type' => $paymentType,
+                'transaction_id' => $transactionId,
+            ]);
+
             $order = Order::where('order_number', $orderId)->first();
 
             if (!$order) {
+                \Log::warning('Order not found', ['order_number' => $orderId]);
                 return response()->json(['message' => 'Order not found'], 404);
             }
+
+            \Log::info('Order found', ['order_id' => $order->order_id, 'order_number' => $order->order_number]);
 
             // Update transaction ID
             $order->update(['transaction_id' => $transactionId]);
@@ -165,23 +189,32 @@ class PaymentController extends Controller
             // Handle transaction status
             if ($transactionStatus == 'capture') {
                 if ($fraudStatus == 'accept') {
+                    \Log::info('Payment captured and accepted', ['order_id' => $order->order_id]);
                     $this->updateOrderPaymentSuccess($order, $paymentType, $defaultPaymentTypeId);
                 }
             } elseif ($transactionStatus == 'settlement') {
+                \Log::info('Payment settled', ['order_id' => $order->order_id]);
                 $this->updateOrderPaymentSuccess($order, $paymentType, $defaultPaymentTypeId);
             } elseif ($transactionStatus == 'pending') {
+                \Log::info('Payment pending', ['order_id' => $order->order_id]);
                 $order->update([
                     'notes' => 'Menunggu pembayaran Midtrans - ' . $paymentType
                 ]);
             } elseif (in_array($transactionStatus, ['deny', 'expire', 'cancel'])) {
+                \Log::warning('Payment failed/cancelled', ['order_id' => $order->order_id, 'status' => $transactionStatus]);
                 $order->update([
                     'notes' => 'Pembayaran gagal/dibatalkan - ' . $transactionStatus
                 ]);
             }
 
+            \Log::info('=== Midtrans Callback Processed Successfully ===');
             return response()->json(['message' => 'Notification processed successfully']);
 
         } catch (\Exception $e) {
+            \Log::error('Midtrans Callback Error (PaymentController)', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             return response()->json([
                 'message' => 'Error processing notification',
                 'error' => $e->getMessage()
@@ -194,26 +227,86 @@ class PaymentController extends Controller
      */
     private function updateOrderPaymentSuccess($order, $paymentType, $paymentTypeId)
     {
+        \Log::info('Updating order payment success', [
+            'order_id' => $order->order_id,
+            'total_price' => $order->total_price,
+        ]);
+
         // Update order
         $order->update([
             'paid_amount' => $order->total_price,
             'remaining_amount' => 0,
-            'status_id' => 2, // Pastikan status_id 2 = "Paid" di tabel order_statuses
+            'status_id' => 2,
         ]);
 
+        \Log::info('Order updated', [
+            'paid_amount' => $order->paid_amount,
+            'remaining_amount' => $order->remaining_amount,
+            'status_id' => $order->status_id,
+        ]);
+
+        // Map Midtrans payment type to our enum
+        $methodMap = [
+            'credit_card' => 'credit_card',
+            'bank_transfer' => 'transfer',
+            'echannel' => 'transfer',
+            'gopay' => 'e-wallet',
+            'shopeepay' => 'e-wallet',
+            'qris' => 'e-wallet',
+        ];
+        $mappedMethod = $methodMap[$paymentType] ?? 'other';
+
         // Create payment record
-        Payment::create([
+        $payment = Payment::create([
             'payment_number' => 'PAY-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -6)),
             'order_id' => $order->order_id,
             'payment_type_id' => $paymentTypeId,
             'amount' => $order->total_price,
-            'payment_method' => $paymentType,
+            'payment_method' => $mappedMethod,
             'payment_status' => 'completed',
             'payment_date' => now(),
             'transaction_reference' => $order->transaction_id,
             'notes' => 'Payment via Midtrans (' . $paymentType . ')',
-            'verified_by' => null, // Auto-verified by Midtrans
+            'verified_by' => null,
             'verification_date' => now(),
         ]);
+
+        \Log::info('Payment record created', ['payment_id' => $payment->payment_id]);
+    }
+     public function paymentSuccess(Request $request)
+    {
+        $orderId = $request->query('order_id');
+
+        if (!$orderId) {
+            return redirect()->route('home')->with('error', 'Invalid payment data');
+        }
+
+        try {
+            $this->initMidtrans();
+            $status = Transaction::status($orderId);
+            $transactionStatus = $status->transaction_status;
+            $paymentType = $status->payment_type;
+            $fraudStatus = $status->fraud_status ?? null;
+
+            $order = Order::where('order_number', $orderId)->first();
+
+            if ($order) {
+                if ($transactionStatus == 'capture') {
+                    if ($fraudStatus == 'accept') {
+                        $this->updateOrderPaymentSuccess($order, $paymentType, 1);
+                    }
+                } else if ($transactionStatus == 'settlement') {
+                    $this->updateOrderPaymentSuccess($order, $paymentType, 1);
+                }
+                
+                return redirect()->route('orders.show', $order->id)->with('success', 'Pembayaran berhasil!');
+            }
+
+            return redirect()->route('home')->with('error', 'Order not found');
+
+        } catch (\Exception $e) {
+            \Log::error('Payment Success Error: ' . $e->getMessage());
+            return redirect()->route('home')->with('error', 'Gagal memverifikasi pembayaran');
+        }
     }
 }

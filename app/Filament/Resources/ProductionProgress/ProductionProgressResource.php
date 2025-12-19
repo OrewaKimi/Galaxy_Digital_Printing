@@ -2,10 +2,12 @@
 
 namespace App\Filament\Resources\ProductionProgress;
 
+use App\Enums\ProductionStatus;
 use App\Filament\Resources\ProductionProgress\Pages\ManageProductionProgress;
 use App\Models\ProductionProgress;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -23,7 +25,10 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\TrashedFilter;
+use Filament\Forms\Components\DatePicker;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
@@ -36,48 +41,97 @@ class ProductionProgressResource extends Resource
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowTrendingUp;
 
     protected static string | UnitEnum | null $navigationGroup = 'Produksi';
+
+    protected static ?int $navigationSort = 41;
+
+    protected static ?string $navigationLabel = 'Progress Produksi';
+
+    protected static ?string $modelLabel = 'Progress Produksi';
+
+    protected static ?string $pluralModelLabel = 'Progress Produksi';
     
     public static function form(Schema $schema): Schema
     {
         return $schema
             ->components([
-                TextInput::make('order_id')
-                    ->required()
-                    ->numeric(),
-                TextInput::make('item_id')
-                    ->numeric()
-                    ->default(null),
-                TextInput::make('stage_id')
-                    ->required()
-                    ->numeric(),
-                Select::make('status')
-                    ->options([
-            'not_started' => 'Not started',
-            'in_progress' => 'In progress',
-            'completed' => 'Completed',
-            'on_hold' => 'On hold',
-            'cancelled' => 'Cancelled',
-            'rejected' => 'Rejected',
-        ])
-                    ->default('not_started')
+                Select::make('order_id')
+                    ->label('Order')
+                    ->relationship('order', 'order_number')
+                    ->searchable()
+                    ->preload()
                     ->required(),
-                DateTimePicker::make('started_at'),
-                DateTimePicker::make('completed_at'),
-                DateTimePicker::make('paused_at'),
+                
+                Select::make('item_id')
+                    ->label('Item Order')
+                    ->relationship('item', 'id')
+                    ->searchable()
+                    ->preload()
+                    ->default(null),
+                
+                Select::make('stage_id')
+                    ->label('Tahap Produksi')
+                    ->relationship('stage', 'stage_name')
+                    ->searchable()
+                    ->preload()
+                    ->required(),
+                
+                Select::make('status')
+                    ->label('Status')
+                    ->options(ProductionStatus::options())
+                    ->default(ProductionStatus::NOT_STARTED->value)
+                    ->required()
+                    ->native(false),
+                
+                DateTimePicker::make('started_at')
+                    ->label('Mulai Pada')
+                    ->native(false),
+                
+                DateTimePicker::make('completed_at')
+                    ->label('Selesai Pada')
+                    ->native(false),
+                
+                DateTimePicker::make('paused_at')
+                    ->label('Dijeda Pada')
+                    ->native(false),
+                
                 TextInput::make('duration')
+                    ->label('Durasi (menit)')
                     ->numeric()
+                    ->suffix('menit')
+                    ->minValue(0)
                     ->default(null),
-                TextInput::make('handled_by')
-                    ->numeric()
+
+                Select::make('handled_by')
+                    ->label('Ditangani Oleh')
+                    ->relationship('handler', 'full_name', fn (Builder $query) => 
+                        $query->whereIn('role', ['production', 'designer', 'admin'])
+                            ->whereNotNull('full_name')
+                    )
+                    ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name . ' (' . ($record->role_name ?? 'N/A') . ')')
+                    ->searchable(['full_name', 'email'])
+                    ->preload()
                     ->default(null),
+
                 TextInput::make('progress_percentage')
+                    ->label('Persentase Progress')
                     ->required()
                     ->numeric()
+                    ->suffix('%')
+                    ->minValue(0)
+                    ->maxValue(100)
                     ->default(0),
+                    
                 Textarea::make('notes')
+                    ->label('Catatan')
+                    ->maxLength(65535)
+                    ->rows(3)
                     ->default(null)
                     ->columnSpanFull(),
+                    
                 Textarea::make('issues')
+                    ->label('Masalah')
+                    ->maxLength(65535)
+                    ->rows(3)
                     ->default(null)
                     ->columnSpanFull(),
             ]);
@@ -87,31 +141,26 @@ class ProductionProgressResource extends Resource
     {
         return $schema
             ->components([
-                TextEntry::make('order_id')
-                    ->numeric(),
-                TextEntry::make('item_id')
-                    ->numeric(),
-                TextEntry::make('stage_id')
-                    ->numeric(),
-                TextEntry::make('status'),
+                TextEntry::make('order.order_number')
+                    ->label('No. Order'),
+                TextEntry::make('stage.stage_name')
+                    ->label('Tahapan'),
+                TextEntry::make('status')
+                    ->label('Status'),
                 TextEntry::make('started_at')
+                    ->label('Mulai')
                     ->dateTime(),
                 TextEntry::make('completed_at')
-                    ->dateTime(),
-                TextEntry::make('paused_at')
+                    ->label('Selesai')
                     ->dateTime(),
                 TextEntry::make('duration')
-                    ->numeric(),
-                TextEntry::make('handled_by')
-                    ->numeric(),
+                    ->label('Durasi')
+                    ->suffix(' menit'),
+                TextEntry::make('handler.full_name')
+                    ->label('Ditangani Oleh'),
                 TextEntry::make('progress_percentage')
-                    ->numeric(),
-                TextEntry::make('created_at')
-                    ->dateTime(),
-                TextEntry::make('updated_at')
-                    ->dateTime(),
-                TextEntry::make('deleted_at')
-                    ->dateTime(),
+                    ->label('Progress')
+                    ->suffix('%'),
             ]);
     }
 
@@ -119,48 +168,107 @@ class ProductionProgressResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('order_id')
-                    ->numeric()
+                TextColumn::make('order.order_number')
+                    ->label('No. Order')
+                    ->searchable()
+                    ->sortable()
+                    ->icon('heroicon-o-document-text'),
+                TextColumn::make('stage.stage_name')
+                    ->label('Tahapan')
+                    ->searchable()
                     ->sortable(),
-                TextColumn::make('item_id')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('stage_id')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('status'),
-                TextColumn::make('started_at')
-                    ->dateTime()
-                    ->sortable(),
-                TextColumn::make('completed_at')
-                    ->dateTime()
-                    ->sortable(),
-                TextColumn::make('paused_at')
-                    ->dateTime()
-                    ->sortable(),
-                TextColumn::make('duration')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('handled_by')
-                    ->numeric()
+                TextColumn::make('status')
+                    ->label('Status')
+                    ->formatStateUsing(fn (string $state): string => ProductionStatus::from($state)->label())
+                    ->badge()
+                    ->color(fn (string $state): string => ProductionStatus::from($state)->getColor())
                     ->sortable(),
                 TextColumn::make('progress_percentage')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('created_at')
-                    ->dateTime()
+                    ->label('Progress')
+                    ->suffix('%')
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('updated_at')
-                    ->dateTime()
+                    ->color(fn ($state) => $state >= 100 ? 'success' : ($state >= 50 ? 'warning' : 'danger')),
+                TextColumn::make('handler.full_name')
+                    ->label('Ditangani Oleh')
+                    ->searchable()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('deleted_at')
-                    ->dateTime()
+                    ->placeholder('-'),
+                TextColumn::make('started_at')
+                    ->label('Mulai')
+                    ->dateTime('d M Y H:i')
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->placeholder('-')
+                    ->toggleable(),
+                TextColumn::make('completed_at')
+                    ->label('Selesai')
+                    ->dateTime('d M Y H:i')
+                    ->sortable()
+                    ->placeholder('-')
+                    ->toggleable(),
+                TextColumn::make('duration')
+                    ->label('Durasi')
+                    ->suffix(' mnt')
+                    ->sortable()
+                    ->placeholder('-')
+                    ->toggleable(),
             ])
+            ->defaultSort('started_at', 'desc')
             ->filters([
+                Filter::make('started_at')
+                    ->form([
+                        DatePicker::make('started_from')
+                            ->label('Mulai Dari')
+                            ->native(false),
+                        DatePicker::make('started_until')
+                            ->label('Mulai Sampai')
+                            ->native(false),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query
+                            ->when(
+                                $data['started_from'],
+                                fn (Builder $query, $date): Builder => $query->whereDate('started_at', '>=', $date),
+                            )
+                            ->when(
+                                $data['started_until'],
+                                fn (Builder $query, $date): Builder => $query->whereDate('started_at', '<=', $date),
+                            );
+                    })
+                    ->indicateUsing(function (array $data): array {
+                        $indicators = [];
+                        if ($data['started_from'] ?? null) {
+                            $indicators[] = 'Mulai dari: ' . \Carbon\Carbon::parse($data['started_from'])->format('d M Y');
+                        }
+                        if ($data['started_until'] ?? null) {
+                            $indicators[] = 'Mulai sampai: ' . \Carbon\Carbon::parse($data['started_until'])->format('d M Y');
+                        }
+                        return $indicators;
+                    }),
+
+                SelectFilter::make('status')
+                    ->label('Status')
+                    ->options(ProductionStatus::options())
+                    ->native(false),
+                SelectFilter::make('stage_id')
+                    ->label('Tahap Produksi')
+                    ->relationship('stage', 'stage_name')
+                    ->searchable()
+                    ->preload()
+                    ->native(false),
+                SelectFilter::make('order_id')
+                    ->label('Order')
+                    ->relationship('order', 'order_number')
+                    ->searchable()
+                    ->preload()
+                    ->native(false),
+                SelectFilter::make('handled_by')
+                    ->label('Ditangani Oleh')
+                    ->relationship('handler', 'full_name', fn (Builder $query) => 
+                        $query->whereNotNull('full_name')
+                    )
+                    ->searchable()
+                    ->preload()
+                    ->native(false),
                 TrashedFilter::make(),
             ])
             ->recordActions([
@@ -171,6 +279,8 @@ class ProductionProgressResource extends Resource
                 RestoreAction::make(),
             ])
             ->toolbarActions([
+                CreateAction::make()
+                    ->label('Tambah Progress'),
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                     ForceDeleteBulkAction::make(),

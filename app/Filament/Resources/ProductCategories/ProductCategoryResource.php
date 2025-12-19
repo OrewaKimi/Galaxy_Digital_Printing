@@ -6,6 +6,7 @@ use App\Filament\Resources\ProductCategories\Pages\ManageProductCategories;
 use App\Models\ProductCategory;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -24,6 +25,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -38,16 +40,37 @@ class ProductCategoryResource extends Resource
 
     protected static string | UnitEnum | null $navigationGroup = 'Produk & Material';
 
+    protected static ?int $navigationSort = 21;
+
+    protected static ?string $recordTitleAttribute = 'category_name';
+
+    protected static ?string $navigationLabel = 'Kategori Produk';
+
+    protected static ?string $modelLabel = 'Kategori Produk';
+
+    protected static ?string $pluralModelLabel = 'Kategori Produk';
+
     public static function form(Schema $schema): Schema
     {
         return $schema
             ->components([
                 TextInput::make('category_name')
-                    ->required(),
+                    ->label('Nama Kategori')
+                    ->required()
+                    ->maxLength(255)
+                    ->placeholder('Masukkan nama kategori'),
+
                 Textarea::make('description')
-                    ->default(null)
+                    ->label('Deskripsi')
+                    ->rows(3)
+                    ->maxLength(500)
+                    ->placeholder('Deskripsi kategori (opsional)')
+                    ->nullable()
                     ->columnSpanFull(),
+
                 Toggle::make('is_active')
+                    ->label('Aktif')
+                    ->default(true)
                     ->required(),
             ]);
     }
@@ -56,15 +79,29 @@ class ProductCategoryResource extends Resource
     {
         return $schema
             ->components([
-                TextEntry::make('category_name'),
+                TextEntry::make('category_name')
+                    ->label('Nama Kategori'),
+
+                TextEntry::make('description')
+                    ->label('Deskripsi')
+                    ->placeholder('-'),
+
                 IconEntry::make('is_active')
+                    ->label('Status Aktif')
                     ->boolean(),
+
                 TextEntry::make('created_at')
-                    ->dateTime(),
+                    ->label('Dibuat Pada')
+                    ->dateTime('d M Y H:i'),
+
                 TextEntry::make('updated_at')
-                    ->dateTime(),
+                    ->label('Diperbarui Pada')
+                    ->dateTime('d M Y H:i'),
+
                 TextEntry::make('deleted_at')
-                    ->dateTime(),
+                    ->label('Dihapus Pada')
+                    ->dateTime('d M Y H:i')
+                    ->placeholder('-'),
             ]);
     }
 
@@ -73,25 +110,51 @@ class ProductCategoryResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('category_name')
-                    ->searchable(),
+                    ->label('Nama Kategori')
+                    ->searchable()
+                    ->sortable(),
+
+                TextColumn::make('description')
+                    ->label('Deskripsi')
+                    ->limit(50)
+                    ->tooltip(fn ($record) => $record->description)
+                    ->placeholder('-')
+                    ->toggleable(),
+
                 IconColumn::make('is_active')
+                    ->label('Aktif')
                     ->boolean(),
+
                 TextColumn::make('created_at')
-                    ->dateTime()
+                    ->label('Dibuat Pada')
+                    ->dateTime('d M Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+
                 TextColumn::make('updated_at')
-                    ->dateTime()
+                    ->label('Diperbarui Pada')
+                    ->dateTime('d M Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+
                 TextColumn::make('deleted_at')
-                    ->dateTime()
+                    ->label('Dihapus Pada')
+                    ->dateTime('d M Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                TrashedFilter::make(),
+                TernaryFilter::make('is_active')
+                    ->label('Status Aktif')
+                    ->placeholder('Semua')
+                    ->trueLabel('Aktif')
+                    ->falseLabel('Tidak Aktif')
+                    ->native(false),
+
+                TrashedFilter::make()
+                    ->label('Status'),
             ])
+            ->defaultSort('category_name', 'asc')
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
@@ -100,6 +163,8 @@ class ProductCategoryResource extends Resource
                 RestoreAction::make(),
             ])
             ->toolbarActions([
+                CreateAction::make()
+                    ->label('Tambah Kategori'),
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                     ForceDeleteBulkAction::make(),

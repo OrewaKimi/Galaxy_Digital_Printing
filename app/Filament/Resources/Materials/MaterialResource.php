@@ -39,73 +39,256 @@ class MaterialResource extends Resource
 
     protected static string | UnitEnum | null $navigationGroup = 'Produk & Material';
 
+    protected static ?int $navigationSort = 22;
+
+    protected static ?string $recordTitleAttribute = 'material_name';
+
+    protected static ?string $navigationLabel = 'Material';
+
+    protected static ?string $modelLabel = 'Material';
+
+    protected static ?string $pluralModelLabel = 'Material';
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('material_name')->label('Nama Material')->required(),
-            TextInput::make('material_code')->label('Kode Material')->default(null),
-            TextInput::make('price_per_unit')->label('Harga per Satuan')->required()->numeric(),
-            TextInput::make('stock_quantity')->label('Stok')->required()->numeric()->default(0.0),
+            TextInput::make('material_name')
+                ->label('Nama Material')
+                ->required()
+                ->maxLength(255)
+                ->placeholder('Masukkan nama material'),
+
+            TextInput::make('material_code')
+                ->label('Kode Material')
+                ->maxLength(50)
+                ->unique(ignoreRecord: true)
+                ->placeholder('Kode unik material')
+                ->nullable(),
+
+            TextInput::make('price_per_unit')
+                ->label('Harga per Satuan')
+                ->required()
+                ->numeric()
+                ->minValue(0)
+                ->prefix('Rp')
+                ->placeholder('0'),
+
+            TextInput::make('stock_quantity')
+                ->label('Stok')
+                ->required()
+                ->numeric()
+                ->minValue(0)
+                ->default(0.0)
+                ->suffix(fn ($get) => $get('unit') ? \App\Enums\Unit::from($get('unit'))->label() : ''),
 
             Select::make('unit')
                 ->label('Satuan')
-                ->options([
-                    'm2' => 'Meter Persegi (m²)',
-                    'lembar' => 'Lembar',
-                    'roll' => 'Roll',
-                    'kg' => 'Kilogram (kg)',
-                    'meter' => 'Meter',
-                    'pcs' => 'Pcs',
-                ])
-                ->default('m2')
+                ->options(\App\Enums\Unit::options())
+                ->default(\App\Enums\Unit::M2->value)
                 ->required()
-                ->searchable(),
+                ->native(false)
+                ->live(),
 
-            TextInput::make('minimum_stock')->label('Stok Minimum')->required()->numeric()->default(0.0),
-            TextInput::make('supplier_name')->label('Nama Supplier')->default(null),
-            TextInput::make('supplier_contact')->label('Kontak Supplier')->default(null),
-            Textarea::make('supplier_address')->label('Alamat Supplier')->default(null)->columnSpanFull(),
-            Toggle::make('is_active')->label('Aktif')->default(true)->required(),
+            TextInput::make('minimum_stock')
+                ->label('Stok Minimum')
+                ->required()
+                ->numeric()
+                ->minValue(0)
+                ->default(0.0)
+                ->helperText('Akan muncul notifikasi jika stok di bawah nilai ini'),
+
+            TextInput::make('supplier_name')
+                ->label('Nama Supplier')
+                ->maxLength(255)
+                ->placeholder('Opsional')
+                ->nullable(),
+
+            TextInput::make('supplier_contact')
+                ->label('Kontak Supplier')
+                ->tel()
+                ->maxLength(50)
+                ->placeholder('Nomor telepon supplier')
+                ->nullable(),
+
+            Textarea::make('supplier_address')
+                ->label('Alamat Supplier')
+                ->rows(2)
+                ->maxLength(500)
+                ->placeholder('Alamat lengkap supplier')
+                ->nullable()
+                ->columnSpanFull(),
+
+            Toggle::make('is_active')
+                ->label('Aktif')
+                ->default(true)
+                ->required(),
         ]);
     }
 
     public static function infolist(Schema $schema): Schema
     {
         return $schema->components([
-            TextEntry::make('material_name')->label('Nama Material'),
-            TextEntry::make('material_code')->label('Kode Material'),
-            TextEntry::make('price_per_unit')->label('Harga per Satuan')->numeric(),
-            TextEntry::make('stock_quantity')->label('Stok')->numeric(),
-            TextEntry::make('unit')->label('Satuan'),
-            TextEntry::make('minimum_stock')->label('Stok Minimum')->numeric(),
-            TextEntry::make('supplier_name')->label('Supplier'),
-            TextEntry::make('supplier_contact')->label('Kontak Supplier'),
-            IconEntry::make('is_active')->label('Aktif')->boolean(),
-            TextEntry::make('created_at')->label('Dibuat')->dateTime(),
-            TextEntry::make('updated_at')->label('Diperbarui')->dateTime(),
-            TextEntry::make('deleted_at')->label('Dihapus')->dateTime(),
+            TextEntry::make('material_name')
+                ->label('Nama Material'),
+
+            TextEntry::make('material_code')
+                ->label('Kode Material')
+                ->placeholder('-'),
+
+            TextEntry::make('price_per_unit')
+                ->label('Harga per Satuan')
+                ->money('IDR'),
+
+            TextEntry::make('stock_quantity')
+                ->label('Stok')
+                ->numeric(decimalPlaces: 2)
+                ->suffix(fn ($record) => ' ' . \App\Enums\Unit::from($record->unit)->label())
+                ->color(fn ($record) => $record->stock_quantity <= $record->minimum_stock ? 'danger' : 'success'),
+
+            TextEntry::make('unit')
+                ->label('Satuan')
+                ->formatStateUsing(fn (string $state): string => \App\Enums\Unit::from($state)->label()),
+
+            TextEntry::make('minimum_stock')
+                ->label('Stok Minimum')
+                ->numeric(decimalPlaces: 2),
+
+            TextEntry::make('supplier_name')
+                ->label('Supplier')
+                ->placeholder('-'),
+
+            TextEntry::make('supplier_contact')
+                ->label('Kontak Supplier')
+                ->placeholder('-'),
+
+            TextEntry::make('supplier_address')
+                ->label('Alamat Supplier')
+                ->placeholder('-'),
+
+            IconEntry::make('is_active')
+                ->label('Status Aktif')
+                ->boolean(),
+
+            TextEntry::make('created_at')
+                ->label('Dibuat Pada')
+                ->dateTime('d M Y H:i'),
+
+            TextEntry::make('updated_at')
+                ->label('Diperbarui Pada')
+                ->dateTime('d M Y H:i'),
+
+            TextEntry::make('deleted_at')
+                ->label('Dihapus Pada')
+                ->dateTime('d M Y H:i')
+                ->placeholder('-'),
         ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table->columns([
-            TextColumn::make('material_name')->label('Nama Material')->searchable(),
-            TextColumn::make('material_code')->label('Kode')->searchable(),
-            TextColumn::make('price_per_unit')->label('Harga')->numeric()->sortable(),
-            TextColumn::make('stock_quantity')->label('Stok')->numeric()->sortable(),
-            TextColumn::make('unit')->label('Satuan'),
-            TextColumn::make('minimum_stock')->label('Stok Minimum')->numeric()->sortable(),
-            TextColumn::make('supplier_name')->label('Supplier')->searchable(),
-            TextColumn::make('supplier_contact')->label('Kontak')->searchable(),
-            IconColumn::make('is_active')->label('Aktif')->boolean(),
-            TextColumn::make('created_at')->label('Dibuat')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
-            TextColumn::make('updated_at')->label('Diperbarui')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
-            TextColumn::make('deleted_at')->label('Dihapus')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
+            TextColumn::make('material_name')
+                ->label('Nama Material')
+                ->searchable()
+                ->sortable(),
+
+            TextColumn::make('material_code')
+                ->label('Kode')
+                ->searchable()
+                ->sortable()
+                ->placeholder('-')
+                ->toggleable(),
+
+            TextColumn::make('stock_quantity')
+                ->label('Stok')
+                ->numeric(decimalPlaces: 2)
+                ->sortable()
+                ->suffix(fn ($record) => ' ' . \App\Enums\Unit::from($record->unit)->label())
+                ->color(fn ($record) => $record->stock_quantity <= $record->minimum_stock ? 'danger' : 'success')
+                ->description(fn ($record) => 
+                    $record->stock_quantity <= $record->minimum_stock 
+                        ? '⚠️ Stok rendah' 
+                        : '✓ Stok cukup'
+                ),
+
+            TextColumn::make('price_per_unit')
+                ->label('Harga')
+                ->money('IDR')
+                ->sortable(),
+
+            TextColumn::make('unit')
+                ->label('Satuan')
+                ->formatStateUsing(fn (string $state): string => \App\Enums\Unit::from($state)->label())
+                ->toggleable(isToggledHiddenByDefault: true),
+
+            TextColumn::make('minimum_stock')
+                ->label('Stok Min')
+                ->numeric(decimalPlaces: 2)
+                ->sortable()
+                ->toggleable(),
+
+            TextColumn::make('supplier_name')
+                ->label('Supplier')
+                ->searchable()
+                ->placeholder('-')
+                ->toggleable(),
+
+            TextColumn::make('supplier_contact')
+                ->label('Kontak')
+                ->searchable()
+                ->placeholder('-')
+                ->toggleable(isToggledHiddenByDefault: true),
+
+            IconColumn::make('is_active')
+                ->label('Aktif')
+                ->boolean(),
+
+            TextColumn::make('created_at')
+                ->label('Dibuat Pada')
+                ->dateTime('d M Y H:i')
+                ->sortable()
+                ->toggleable(isToggledHiddenByDefault: true),
+
+            TextColumn::make('updated_at')
+                ->label('Diperbarui Pada')
+                ->dateTime('d M Y H:i')
+                ->sortable()
+                ->toggleable(isToggledHiddenByDefault: true),
+
+            TextColumn::make('deleted_at')
+                ->label('Dihapus Pada')
+                ->dateTime('d M Y H:i')
+                ->sortable()
+                ->toggleable(isToggledHiddenByDefault: true),
         ])
         ->filters([
-            TrashedFilter::make(),
+            \Filament\Tables\Filters\SelectFilter::make('unit')
+                ->label('Satuan')
+                ->options(\App\Enums\Unit::options())
+                ->native(false),
+
+            \Filament\Tables\Filters\TernaryFilter::make('low_stock')
+                ->label('Stok Rendah')
+                ->placeholder('Semua')
+                ->trueLabel('Stok di bawah minimum')
+                ->falseLabel('Stok cukup')
+                ->queries(
+                    true: fn (Builder $query) => $query->whereColumn('stock_quantity', '<=', 'minimum_stock'),
+                    false: fn (Builder $query) => $query->whereColumn('stock_quantity', '>', 'minimum_stock'),
+                )
+                ->native(false),
+
+            \Filament\Tables\Filters\TernaryFilter::make('is_active')
+                ->label('Status Aktif')
+                ->placeholder('Semua')
+                ->trueLabel('Aktif')
+                ->falseLabel('Tidak Aktif')
+                ->native(false),
+
+            TrashedFilter::make()
+                ->label('Status'),
         ])
+        ->defaultSort('material_name', 'asc')
         ->recordActions([
             ViewAction::make(),
             EditAction::make(),
@@ -114,6 +297,8 @@ class MaterialResource extends Resource
             RestoreAction::make(),
         ])
         ->toolbarActions([
+            \Filament\Actions\CreateAction::make()
+                ->label('Tambah Material'),
             BulkActionGroup::make([
                 DeleteBulkAction::make(),
                 ForceDeleteBulkAction::make(),

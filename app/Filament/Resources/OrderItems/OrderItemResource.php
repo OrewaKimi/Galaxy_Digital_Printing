@@ -2,10 +2,12 @@
 
 namespace App\Filament\Resources\OrderItems;
 
+use App\Enums\Unit;
 use App\Filament\Resources\OrderItems\Pages\ManageOrderItems;
 use App\Models\OrderItem;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -22,6 +24,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -36,81 +39,294 @@ class OrderItemResource extends Resource
 
     protected static string | UnitEnum | null $navigationGroup = 'Transaksi';
 
+    protected static ?int $navigationSort = 11;
+
+    protected static ?string $navigationLabel = 'Item Order';
+
+    protected static ?string $modelLabel = 'Item Order';
+
+    protected static ?string $pluralModelLabel = 'Item Order';
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('order_id')->required()->numeric(),
-            TextInput::make('product_id')->required()->numeric(),
-            TextInput::make('material_id')->numeric()->default(null),
-            TextInput::make('width')->numeric()->default(null),
-            TextInput::make('height')->numeric()->default(null),
-            TextInput::make('area')->numeric()->default(null),
-            TextInput::make('quantity')->required()->numeric()->default(1),
+            Select::make('order_id')
+                ->label('Order')
+                ->relationship('order', 'order_number')
+                ->searchable()
+                ->preload()
+                ->required(),
+            
+            Select::make('product_id')
+                ->label('Produk')
+                ->relationship('product', 'product_name')
+                ->getOptionLabelFromRecordUsing(fn ($record) => 
+                    "{$record->product_name} - Rp " . number_format($record->base_price, 0, ',', '.')
+                )
+                ->searchable()
+                ->preload()
+                ->required(),
+            
+            Select::make('material_id')
+                ->label('Material')
+                ->relationship('material', 'material_name')
+                ->searchable()
+                ->preload()
+                ->default(null),
+            
+            TextInput::make('width')
+                ->label('Lebar')
+                ->numeric()
+                ->suffix('cm')
+                ->minValue(0)
+                ->default(null),
+            
+            TextInput::make('height')
+                ->label('Tinggi')
+                ->numeric()
+                ->suffix('cm')
+                ->minValue(0)
+                ->default(null),
+            
+            TextInput::make('area')
+                ->label('Luas')
+                ->numeric()
+                ->suffix('m²')
+                ->minValue(0)
+                ->default(null)
+                ->helperText('Luas otomatis: lebar × tinggi ÷ 10000'),
+            
+            TextInput::make('quantity')
+                ->label('Jumlah')
+                ->required()
+                ->numeric()
+                ->minValue(1)
+                ->default(1),
 
             Select::make('unit')
                 ->label('Satuan')
-                ->options([
-                    'm2' => 'Meter Persegi (m²)',
-                    'lembar' => 'Lembar',
-                    'roll' => 'Roll',
-                    'kg' => 'Kilogram (kg)',
-                    'meter' => 'Meter',
-                    'pcs' => 'Pcs',
-                ])
-                ->default('pcs')
+                ->options(Unit::options())
+                ->default(Unit::PCS->value)
                 ->required()
-                ->searchable(),
+                ->native(false),
 
-            TextInput::make('unit_price')->required()->numeric(),
-            TextInput::make('material_cost')->required()->numeric()->default(0.0),
-            TextInput::make('production_cost')->required()->numeric()->default(0.0),
-            TextInput::make('subtotal')->required()->numeric(),
-            Textarea::make('specifications')->default(null)->columnSpanFull(),
-            Textarea::make('notes')->default(null)->columnSpanFull(),
+            TextInput::make('unit_price')
+                ->label('Harga Satuan')
+                ->required()
+                ->numeric()
+                ->prefix('Rp')
+                ->minValue(0),
+            
+            TextInput::make('material_cost')
+                ->label('Biaya Material')
+                ->required()
+                ->numeric()
+                ->prefix('Rp')
+                ->minValue(0)
+                ->default(0.0),
+            
+            TextInput::make('production_cost')
+                ->label('Biaya Produksi')
+                ->required()
+                ->numeric()
+                ->prefix('Rp')
+                ->minValue(0)
+                ->default(0.0),
+            
+            TextInput::make('subtotal')
+                ->label('Subtotal')
+                ->required()
+                ->numeric()
+                ->prefix('Rp')
+                ->minValue(0),
+            
+            Textarea::make('specifications')
+                ->label('Spesifikasi')
+                ->maxLength(65535)
+                ->rows(3)
+                ->default(null)
+                ->columnSpanFull(),
+            
+            Textarea::make('notes')
+                ->label('Catatan')
+                ->maxLength(65535)
+                ->rows(3)
+                ->default(null)
+                ->columnSpanFull(),
         ]);
     }
 
     public static function infolist(Schema $schema): Schema
     {
         return $schema->components([
-            TextEntry::make('order_id')->numeric(),
-            TextEntry::make('product_id')->numeric(),
-            TextEntry::make('material_id')->numeric(),
-            TextEntry::make('width')->numeric(),
-            TextEntry::make('height')->numeric(),
-            TextEntry::make('area')->numeric(),
-            TextEntry::make('quantity')->numeric(),
-            TextEntry::make('unit')->label('Satuan'),
-            TextEntry::make('unit_price')->numeric(),
-            TextEntry::make('material_cost')->numeric(),
-            TextEntry::make('production_cost')->numeric(),
-            TextEntry::make('subtotal')->numeric(),
-            TextEntry::make('created_at')->dateTime(),
-            TextEntry::make('updated_at')->dateTime(),
-            TextEntry::make('deleted_at')->dateTime(),
+            TextEntry::make('order.order_number')
+                ->label('Nomor Order'),
+
+            TextEntry::make('product.product_name')
+                ->label('Produk'),
+
+            TextEntry::make('material.material_name')
+                ->label('Material')
+                ->placeholder('-'),
+
+            TextEntry::make('width')
+                ->label('Lebar')
+                ->numeric()
+                ->suffix(' cm')
+                ->placeholder('-'),
+
+            TextEntry::make('height')
+                ->label('Tinggi')
+                ->numeric()
+                ->suffix(' cm')
+                ->placeholder('-'),
+
+            TextEntry::make('area')
+                ->label('Luas')
+                ->numeric()
+                ->suffix(' m²')
+                ->placeholder('-'),
+
+            TextEntry::make('quantity')
+                ->label('Jumlah')
+                ->numeric(),
+
+            TextEntry::make('unit')
+                ->label('Satuan')
+                ->formatStateUsing(fn (string $state): string => Unit::from($state)->label()),
+
+            TextEntry::make('unit_price')
+                ->label('Harga Satuan')
+                ->money('IDR'),
+
+            TextEntry::make('material_cost')
+                ->label('Biaya Material')
+                ->money('IDR'),
+
+            TextEntry::make('production_cost')
+                ->label('Biaya Produksi')
+                ->money('IDR'),
+
+            TextEntry::make('subtotal')
+                ->label('Subtotal')
+                ->money('IDR'),
+
+            TextEntry::make('specifications')
+                ->label('Spesifikasi')
+                ->placeholder('-'),
+
+            TextEntry::make('notes')
+                ->label('Catatan')
+                ->placeholder('-'),
+
+            TextEntry::make('created_at')
+                ->label('Dibuat Pada')
+                ->dateTime('d M Y H:i'),
+
+            TextEntry::make('updated_at')
+                ->label('Diperbarui Pada')
+                ->dateTime('d M Y H:i'),
+
+            TextEntry::make('deleted_at')
+                ->label('Dihapus Pada')
+                ->dateTime('d M Y H:i')
+                ->placeholder('-'),
         ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table->columns([
-            TextColumn::make('order_id')->numeric()->sortable(),
-            TextColumn::make('product_id')->numeric()->sortable(),
-            TextColumn::make('material_id')->numeric()->sortable(),
-            TextColumn::make('width')->numeric()->sortable(),
-            TextColumn::make('height')->numeric()->sortable(),
-            TextColumn::make('area')->numeric()->sortable(),
-            TextColumn::make('quantity')->numeric()->sortable(),
-            TextColumn::make('unit')->label('Satuan')->searchable(),
-            TextColumn::make('unit_price')->numeric()->sortable(),
-            TextColumn::make('material_cost')->numeric()->sortable(),
-            TextColumn::make('production_cost')->numeric()->sortable(),
-            TextColumn::make('subtotal')->numeric()->sortable(),
-            TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
-            TextColumn::make('updated_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
-            TextColumn::make('deleted_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
+            TextColumn::make('order.order_number')
+                ->label('No. Order')
+                ->searchable()
+                ->sortable()
+                ->icon('heroicon-o-document-text'),
+            TextColumn::make('product.product_name')
+                ->label('Produk')
+                ->searchable()
+                ->sortable()
+                ->limit(30),
+            TextColumn::make('material.material_name')
+                ->label('Material')
+                ->searchable()
+                ->sortable()
+                ->placeholder('-')
+                ->toggleable(),
+            TextColumn::make('quantity')
+                ->label('Jumlah')
+                ->numeric()
+                ->sortable(),
+            TextColumn::make('unit')
+                ->label('Satuan')
+                ->formatStateUsing(fn (string $state): string => Unit::from($state)->label())
+                ->sortable(),
+            TextColumn::make('width')
+                ->label('Lebar')
+                ->numeric()
+                ->suffix(' cm')
+                ->sortable()
+                ->placeholder('-')
+                ->toggleable(isToggledHiddenByDefault: true),
+            TextColumn::make('height')
+                ->label('Tinggi')
+                ->numeric()
+                ->suffix(' cm')
+                ->sortable()
+                ->placeholder('-')
+                ->toggleable(isToggledHiddenByDefault: true),
+            TextColumn::make('area')
+                ->label('Luas')
+                ->numeric()
+                ->suffix(' m²')
+                ->sortable()
+                ->placeholder('-')
+                ->toggleable(isToggledHiddenByDefault: true),
+            TextColumn::make('unit_price')
+                ->label('Harga Satuan')
+                ->money('IDR')
+                ->sortable(),
+            TextColumn::make('subtotal')
+                ->label('Subtotal')
+                ->money('IDR')
+                ->sortable(),
+            TextColumn::make('material_cost')
+                ->label('Biaya Material')
+                ->money('IDR')
+                ->sortable()
+                ->toggleable(isToggledHiddenByDefault: true),
+            TextColumn::make('production_cost')
+                ->label('Biaya Produksi')
+                ->money('IDR')
+                ->sortable()
+                ->toggleable(isToggledHiddenByDefault: true),
+            TextColumn::make('created_at')
+                ->label('Dibuat')
+                ->dateTime('d M Y H:i')
+                ->sortable()
+                ->toggleable(isToggledHiddenByDefault: true),
         ])
+        ->defaultSort('created_at', 'desc')
         ->filters([
+            SelectFilter::make('order_id')
+                ->label('Order')
+                ->relationship('order', 'order_number')
+                ->searchable()
+                ->preload(),
+            SelectFilter::make('product_id')
+                ->label('Produk')
+                ->relationship('product', 'product_name')
+                ->searchable()
+                ->preload(),
+            SelectFilter::make('material_id')
+                ->label('Material')
+                ->relationship('material', 'material_name')
+                ->searchable()
+                ->preload(),
+            SelectFilter::make('unit')
+                ->label('Satuan')
+                ->options(Unit::options())
+                ->native(false),
             TrashedFilter::make(),
         ])
         ->recordActions([
@@ -121,6 +337,8 @@ class OrderItemResource extends Resource
             RestoreAction::make(),
         ])
         ->toolbarActions([
+            CreateAction::make()
+                ->label('Tambah Item Order'),
             BulkActionGroup::make([
                 DeleteBulkAction::make(),
                 ForceDeleteBulkAction::make(),

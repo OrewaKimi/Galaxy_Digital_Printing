@@ -27,6 +27,9 @@ class User extends Authenticatable implements FilamentUser, HasName, HasAppAuthe
         'full_name',
         'is_active',
         'last_login',
+        'google_id',
+        'email_verified_at',
+        'name',
     ];
 
     protected $hidden = [

@@ -2,10 +2,12 @@
 
 namespace App\Filament\Resources\SalesReports;
 
+use App\Enums\ReportPeriod;
 use App\Filament\Resources\SalesReports\Pages\ManageSalesReports;
 use App\Models\SalesReport;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -23,11 +25,12 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
- use UnitEnum;
+use UnitEnum;
 
 class SalesReportResource extends Resource
 {
@@ -37,76 +40,144 @@ class SalesReportResource extends Resource
 
     protected static string | UnitEnum | null $navigationGroup = 'Laporan';
 
+    protected static ?int $navigationSort = 50;
+
+    protected static ?string $navigationLabel = 'Laporan Penjualan';
+
+    protected static ?string $modelLabel = 'Laporan Penjualan';
+
+    protected static ?string $pluralModelLabel = 'Laporan Penjualan';
+
+    protected static ?string $recordTitleAttribute = 'report_number';
+
     public static function form(Schema $schema): Schema
     {
         return $schema
             ->components([
                 TextInput::make('report_number')
-                    ->required(),
+                    ->label('Nomor Laporan')
+                    ->required()
+                    ->maxLength(50)
+                    ->unique(ignoreRecord: true),
+                
                 DatePicker::make('report_date')
-                    ->required(),
+                    ->label('Tanggal Laporan')
+                    ->required()
+                    ->default(now())
+                    ->native(false),
+                
                 DatePicker::make('period_start')
-                    ->required(),
+                    ->label('Periode Mulai')
+                    ->required()
+                    ->native(false),
+                
                 DatePicker::make('period_end')
-                    ->required(),
+                    ->label('Periode Selesai')
+                    ->required()
+                    ->native(false),
+                
                 Select::make('report_period')
-                    ->options([
-            'daily' => 'Daily',
-            'weekly' => 'Weekly',
-            'monthly' => 'Monthly',
-            'quarterly' => 'Quarterly',
-            'yearly' => 'Yearly',
-            'custom' => 'Custom',
-        ])
-                    ->required(),
+                    ->label('Periode Laporan')
+                    ->options(ReportPeriod::options())
+                    ->required()
+                    ->native(false),
+                
                 TextInput::make('total_sales')
+                    ->label('Total Penjualan')
                     ->required()
                     ->numeric()
+                    ->prefix('Rp')
+                    ->minValue(0)
                     ->default(0.0),
+                
                 TextInput::make('total_cost')
+                    ->label('Total Biaya')
                     ->required()
                     ->numeric()
+                    ->prefix('Rp')
+                    ->minValue(0)
                     ->default(0.0),
+                
                 TextInput::make('total_profit')
+                    ->label('Total Profit')
                     ->required()
                     ->numeric()
+                    ->prefix('Rp')
                     ->default(0.0),
+                
                 TextInput::make('total_discount')
+                    ->label('Total Diskon')
                     ->required()
                     ->numeric()
+                    ->prefix('Rp')
+                    ->minValue(0)
                     ->default(0.0),
+                
                 TextInput::make('total_tax')
+                    ->label('Total Pajak')
                     ->required()
                     ->numeric()
+                    ->prefix('Rp')
+                    ->minValue(0)
                     ->default(0.0),
+                
                 TextInput::make('total_orders')
+                    ->label('Total Order')
                     ->required()
                     ->numeric()
+                    ->minValue(0)
                     ->default(0),
+                
                 TextInput::make('completed_orders')
+                    ->label('Order Selesai')
                     ->required()
                     ->numeric()
+                    ->minValue(0)
                     ->default(0),
+                
                 TextInput::make('cancelled_orders')
+                    ->label('Order Dibatalkan')
                     ->required()
                     ->numeric()
+                    ->minValue(0)
                     ->default(0),
+                
                 TextInput::make('pending_orders')
+                    ->label('Order Pending')
                     ->required()
                     ->numeric()
+                    ->minValue(0)
                     ->default(0),
+                
                 TextInput::make('total_customers')
+                    ->label('Total Customer')
                     ->required()
                     ->numeric()
+                    ->minValue(0)
                     ->default(0),
+                
                 TextInput::make('new_customers')
+                    ->label('Customer Baru')
                     ->required()
                     ->numeric()
+                    ->minValue(0)
                     ->default(0),
-                TextInput::make('generated_by')
-                    ->numeric()
+
+                Select::make('generated_by')
+                    ->label('Dibuat Oleh')
+                    ->relationship('generator', 'full_name', fn (Builder $query) => 
+                        $query->whereIn('role', ['admin', 'customer_service'])
+                            ->whereNotNull('full_name')
+                    )
+                    ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name . ' (' . ($record->role_name ?? 'N/A') . ')')
+                    ->searchable(['full_name', 'email'])
+                    ->preload()
                     ->default(null),
+
                 Textarea::make('notes')
+                    ->label('Catatan')
+                    ->maxLength(65535)
+                    ->rows(3)
                     ->default(null)
                     ->columnSpanFull(),
             ]);
@@ -116,44 +187,36 @@ class SalesReportResource extends Resource
     {
         return $schema
             ->components([
-                TextEntry::make('report_number'),
+                TextEntry::make('report_number')
+                    ->label('Nomor Laporan'),
                 TextEntry::make('report_date')
+                    ->label('Tanggal')
                     ->date(),
                 TextEntry::make('period_start')
+                    ->label('Periode Mulai')
                     ->date(),
                 TextEntry::make('period_end')
+                    ->label('Periode Selesai')
                     ->date(),
-                TextEntry::make('report_period'),
+                TextEntry::make('report_period')
+                    ->label('Periode'),
                 TextEntry::make('total_sales')
-                    ->numeric(),
+                    ->label('Total Penjualan')
+                    ->money('IDR'),
                 TextEntry::make('total_cost')
-                    ->numeric(),
+                    ->label('Total Biaya')
+                    ->money('IDR'),
                 TextEntry::make('total_profit')
-                    ->numeric(),
-                TextEntry::make('total_discount')
-                    ->numeric(),
-                TextEntry::make('total_tax')
-                    ->numeric(),
+                    ->label('Total Profit')
+                    ->money('IDR'),
                 TextEntry::make('total_orders')
+                    ->label('Total Order')
                     ->numeric(),
                 TextEntry::make('completed_orders')
+                    ->label('Selesai')
                     ->numeric(),
-                TextEntry::make('cancelled_orders')
-                    ->numeric(),
-                TextEntry::make('pending_orders')
-                    ->numeric(),
-                TextEntry::make('total_customers')
-                    ->numeric(),
-                TextEntry::make('new_customers')
-                    ->numeric(),
-                TextEntry::make('generated_by')
-                    ->numeric(),
-                TextEntry::make('created_at')
-                    ->dateTime(),
-                TextEntry::make('updated_at')
-                    ->dateTime(),
-                TextEntry::make('deleted_at')
-                    ->dateTime(),
+                TextEntry::make('generator.full_name')
+                    ->label('Dibuat Oleh'),
             ]);
     }
 
@@ -162,67 +225,84 @@ class SalesReportResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('report_number')
-                    ->searchable(),
+                    ->label('No. Laporan')
+                    ->searchable()
+                    ->sortable()
+                    ->icon('heroicon-o-hashtag')
+                    ->copyable()
+                    ->copyMessage('Nomor laporan disalin'),
                 TextColumn::make('report_date')
-                    ->date()
+                    ->label('Tanggal')
+                    ->date('d M Y')
                     ->sortable(),
                 TextColumn::make('period_start')
-                    ->date()
+                    ->label('Periode')
+                    ->date('d M Y')
+                    ->formatStateUsing(fn ($record) => $record->period_start->format('d M Y') . ' - ' . $record->period_end->format('d M Y'))
                     ->sortable(),
-                TextColumn::make('period_end')
-                    ->date()
+                TextColumn::make('report_period')
+                    ->label('Tipe Periode')
+                    ->formatStateUsing(fn (string $state): string => ReportPeriod::from($state)->label())
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'daily' => 'info',
+                        'weekly' => 'success',
+                        'monthly' => 'warning',
+                        'quarterly' => 'primary',
+                        'yearly' => 'danger',
+                        'custom' => 'gray',
+                        default => 'gray',
+                    })
                     ->sortable(),
-                TextColumn::make('report_period'),
                 TextColumn::make('total_sales')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('total_cost')
-                    ->numeric()
+                    ->label('Penjualan')
+                    ->money('IDR')
                     ->sortable(),
                 TextColumn::make('total_profit')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('total_discount')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('total_tax')
-                    ->numeric()
-                    ->sortable(),
+                    ->label('Profit')
+                    ->money('IDR')
+                    ->sortable()
+                    ->color(fn ($state) => $state >= 0 ? 'success' : 'danger'),
                 TextColumn::make('total_orders')
+                    ->label('Total Order')
                     ->numeric()
                     ->sortable(),
                 TextColumn::make('completed_orders')
+                    ->label('Selesai')
                     ->numeric()
-                    ->sortable(),
-                TextColumn::make('cancelled_orders')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('pending_orders')
-                    ->numeric()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('total_customers')
+                    ->label('Customer')
                     ->numeric()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('new_customers')
+                    ->label('Baru')
                     ->numeric()
-                    ->sortable(),
-                TextColumn::make('generated_by')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('created_at')
-                    ->dateTime()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('updated_at')
-                    ->dateTime()
+                    ->toggleable(),
+                TextColumn::make('generator.full_name')
+                    ->label('Dibuat Oleh')
+                    ->searchable()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('deleted_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->placeholder('-')
+                    ->toggleable(),
             ])
+            ->defaultSort('report_date', 'desc')
             ->filters([
+                SelectFilter::make('report_period')
+                    ->label('Periode')
+                    ->options(ReportPeriod::options())
+                    ->native(false),
+                SelectFilter::make('generated_by')
+                    ->label('Dibuat Oleh')
+                    ->relationship('generator', 'full_name', fn (Builder $query) => 
+                        $query->whereNotNull('full_name')
+                    )
+                    ->searchable()
+                    ->preload()
+                    ->native(false),
                 TrashedFilter::make(),
             ])
             ->recordActions([
@@ -233,6 +313,8 @@ class SalesReportResource extends Resource
                 RestoreAction::make(),
             ])
             ->toolbarActions([
+                CreateAction::make()
+                    ->label('Tambah Laporan'),
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                     ForceDeleteBulkAction::make(),

@@ -7,9 +7,13 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\Customer;
+use App\Models\Payment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Midtrans\Config;
+use Midtrans\Transaction as MidtransTransaction;
 
 class OrderController extends Controller
 {
@@ -121,7 +125,101 @@ class OrderController extends Controller
     public function show($id)
     {
         $order = Order::with(['orderItems.product', 'status'])->findOrFail($id);
+        
+        if ($order->snap_token && $order->remaining_amount > 0) {
+            $this->checkMidtransPaymentStatus($order);
+            $order->refresh();
+        }
+        
         return view('frontend.orders.show', compact('order'));
+    }
+
+    private function checkMidtransPaymentStatus($order)
+    {
+        try {
+            Config::$serverKey = config('midtrans.server_key');
+            Config::$isProduction = config('midtrans.is_production');
+
+            Log::info('Checking payment status for order', ['order_number' => $order->order_number]);
+
+            $status = MidtransTransaction::status($order->order_number);
+
+            Log::info('Midtrans status response', [
+                'order_number' => $order->order_number,
+                'transaction_status' => $status->transaction_status,
+                'payment_type' => $status->payment_type ?? null,
+            ]);
+
+            if (in_array($status->transaction_status, ['capture', 'settlement'])) {
+                $existingPayment = Payment::where('order_id', $order->order_id)
+                    ->where('payment_status', 'completed')
+                    ->first();
+
+                if (!$existingPayment) {
+                    $order->update([
+                        'status_id' => 2,
+                        'paid_amount' => $order->total_price,
+                        'remaining_amount' => 0,
+                        'transaction_id' => $status->transaction_id ?? null,
+                        'notes' => 'Pembayaran berhasil via Midtrans - ' . ($status->payment_type ?? 'unknown'),
+                    ]);
+
+                    $methodMap = [
+                        'credit_card' => 'credit_card',
+                        'bank_transfer' => 'transfer',
+                        'echannel' => 'transfer',
+                        'gopay' => 'e-wallet',
+                        'shopeepay' => 'e-wallet',
+                        'qris' => 'e-wallet',
+                    ];
+                    $mappedMethod = $methodMap[$status->payment_type] ?? 'other';
+
+                    Payment::create([
+                        'payment_number' => 'PAY-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -6)),
+                        'order_id' => $order->order_id,
+                        'payment_type_id' => 1,
+                        'amount' => $order->total_price,
+                        'payment_method' => $mappedMethod,
+                        'payment_status' => 'completed',
+                        'payment_date' => now(),
+                        'transaction_reference' => $status->transaction_id ?? null,
+                        'notes' => 'Payment via Midtrans (' . ($status->payment_type ?? 'unknown') . ')',
+                        'verified_by' => null,
+                        'verification_date' => now(),
+                    ]);
+
+                    Log::info('Payment and inventory updated from finish callback', [
+                        'order_id' => $order->order_id,
+                    ]);
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to check Midtrans payment status', [
+                'order_id' => $order->order_id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    public function checkPayment($id)
+    {
+        $order = Order::findOrFail($id);
+        
+        if ($order->snap_token) {
+            $this->checkMidtransPaymentStatus($order);
+            $order->refresh();
+            
+            if ($order->remaining_amount <= 0) {
+                return redirect()->route('orders.show', $order->order_id)
+                    ->with('success', 'Pembayaran berhasil dikonfirmasi!');
+            } else {
+                return redirect()->route('orders.show', $order->order_id)
+                    ->with('info', 'Pembayaran belum terdeteksi atau masih dalam proses.');
+            }
+        }
+        
+        return redirect()->route('orders.show', $order->order_id)
+            ->with('error', 'Order ini tidak memiliki transaksi Midtrans.');
     }
 
     public function uploadDesign(Request $request, $id)

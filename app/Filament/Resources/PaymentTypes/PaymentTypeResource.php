@@ -6,6 +6,7 @@ use App\Filament\Resources\PaymentTypes\Pages\ManagePaymentTypes;
 use App\Models\PaymentType;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -24,6 +25,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -38,25 +40,62 @@ class PaymentTypeResource extends Resource
 
     protected static string | UnitEnum | null $navigationGroup = 'Transaksi';
 
+    protected static ?int $navigationSort = 14;
+
+    protected static ?string $navigationLabel = 'Tipe Pembayaran';
+
+    protected static ?string $modelLabel = 'Tipe Pembayaran';
+
+    protected static ?string $pluralModelLabel = 'Tipe Pembayaran';
+
+    protected static ?string $recordTitleAttribute = 'type_name';
+
     public static function form(Schema $schema): Schema
     {
         return $schema
             ->components([
                 TextInput::make('type_name')
-                    ->required(),
+                    ->label('Nama Tipe')
+                    ->required()
+                    ->maxLength(100)
+                    ->unique(ignoreRecord: true),
+                
                 TextInput::make('type_code')
-                    ->required(),
+                    ->label('Kode Tipe')
+                    ->required()
+                    ->maxLength(20)
+                    ->unique(ignoreRecord: true)
+                    ->alphaNum(),
+                
                 TextInput::make('minimum_percentage')
+                    ->label('Persentase Minimum')
                     ->numeric()
-                    ->default(null),
+                    ->suffix('%')
+                    ->minValue(0)
+                    ->maxValue(100)
+                    ->default(null)
+                    ->helperText('Persentase minimal untuk tipe pembayaran ini'),
+                
                 TextInput::make('maximum_percentage')
+                    ->label('Persentase Maksimum')
                     ->numeric()
-                    ->default(null),
+                    ->suffix('%')
+                    ->minValue(0)
+                    ->maxValue(100)
+                    ->default(null)
+                    ->helperText('Persentase maksimal untuk tipe pembayaran ini'),
+                
                 Textarea::make('description')
+                    ->label('Deskripsi')
+                    ->maxLength(65535)
+                    ->rows(3)
                     ->default(null)
                     ->columnSpanFull(),
+                
                 Toggle::make('is_active')
-                    ->required(),
+                    ->label('Aktif')
+                    ->default(true)
+                    ->inline(false),
             ]);
     }
 
@@ -86,31 +125,55 @@ class PaymentTypeResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('type_name')
-                    ->searchable(),
+                    ->label('Nama Tipe')
+                    ->searchable()
+                    ->sortable(),
                 TextColumn::make('type_code')
-                    ->searchable(),
+                    ->label('Kode')
+                    ->searchable()
+                    ->sortable()
+                    ->badge()
+                    ->color('info'),
                 TextColumn::make('minimum_percentage')
+                    ->label('Min %')
                     ->numeric()
-                    ->sortable(),
+                    ->suffix('%')
+                    ->sortable()
+                    ->placeholder('-'),
                 TextColumn::make('maximum_percentage')
+                    ->label('Max %')
                     ->numeric()
-                    ->sortable(),
+                    ->suffix('%')
+                    ->sortable()
+                    ->placeholder('-'),
+                TextColumn::make('description')
+                    ->label('Deskripsi')
+                    ->limit(50)
+                    ->toggleable()
+                    ->placeholder('-'),
                 IconColumn::make('is_active')
-                    ->boolean(),
+                    ->label('Aktif')
+                    ->boolean()
+                    ->sortable(),
                 TextColumn::make('created_at')
-                    ->dateTime()
+                    ->label('Dibuat')
+                    ->dateTime('d M Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('deleted_at')
-                    ->dateTime()
+                    ->label('Diperbarui')
+                    ->dateTime('d M Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('type_name', 'asc')
             ->filters([
+                TernaryFilter::make('is_active')
+                    ->label('Status')
+                    ->placeholder('Semua Tipe')
+                    ->trueLabel('Hanya Aktif')
+                    ->falseLabel('Hanya Nonaktif')
+                    ->native(false),
                 TrashedFilter::make(),
             ])
             ->recordActions([
@@ -121,6 +184,8 @@ class PaymentTypeResource extends Resource
                 RestoreAction::make(),
             ])
             ->toolbarActions([
+                CreateAction::make()
+                    ->label('Tambah Tipe Pembayaran'),
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                     ForceDeleteBulkAction::make(),

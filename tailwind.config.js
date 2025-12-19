@@ -1,9 +1,12 @@
 /** @type {import('tailwindcss').Config} */
-export default {
+module.exports = {
   content: [
     './resources/**/*.blade.php',
     './resources/**/*.js',
     './resources/**/*.vue',
+    './resources/**/*.ts',
+    './resources/**/*.jsx',
+    './resources/**/*.tsx',
   ],
   theme: {
     extend: {
@@ -13,11 +16,14 @@ export default {
       colors: {
         primary: '#ffffff',
         secondary: '#000000',
+        accent: '#1d4ed8',
+        danger: '#dc2626', 
       },
     },
   },
   plugins: [
     require('@tailwindcss/forms'),
     require('@tailwindcss/typography'),
+    require('@tailwindcss/aspect-ratio'),
   ],
 }

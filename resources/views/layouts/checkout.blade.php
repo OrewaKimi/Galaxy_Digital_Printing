@@ -38,16 +38,50 @@
 @section('scripts')
 <script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="{{ config('midtrans.client_key') }}"></script>
 <script type="text/javascript">
+    let orderNumber = '{{ $transaction->order_id }}';
+    
+    function checkPaymentStatus() {
+        fetch(`/test/order/${orderNumber}/status`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.data.status === 'Paid') {
+                    console.log('Payment confirmed!', data);
+                    window.location.href = '{{ route("home") }}?status=success&order=' + orderNumber;
+                }
+            })
+            .catch(error => {
+                console.error('Error checking payment status:', error);
+            });
+    }
+    
     document.getElementById('pay-button').onclick = function(){
         snap.pay('{{ $transaction->snap_token }}', {
             onSuccess: function(result){
-                window.location.href = '{{ route("home") }}?status=success';
+                console.log('Payment success:', result);
+                
+                setTimeout(() => {
+                    checkPaymentStatus();
+                }, 2000);
+                
+                let checkInterval = setInterval(() => {
+                    checkPaymentStatus();
+                }, 5000);
+                
+                setTimeout(() => {
+                    clearInterval(checkInterval);
+                    window.location.href = '{{ route("home") }}?status=pending';
+                }, 60000);
             },
             onPending: function(result){
+                console.log('Payment pending:', result);
                 window.location.href = '{{ route("home") }}?status=pending';
             },
             onError: function(result){
+                console.log('Payment error:', result);
                 window.location.href = '{{ route("home") }}?status=error';
+            },
+            onClose: function(){
+                console.log('Payment popup closed');
             }
         });
     };
