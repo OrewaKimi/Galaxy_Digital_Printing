@@ -21,10 +21,13 @@ COPY . .
 RUN composer install --optimize-autoloader --no-interaction
 
 # Install node dependencies
-RUN npm install --legacy-peer-deps --force && npm prune --omit=dev
+RUN npm install --legacy-peer-deps --force
 
 # Build assets
 RUN npm run build
+
+# Prune dev dependencies after build
+RUN npm prune --omit=dev
 
 # Create necessary directories and set permissions
 RUN mkdir -p storage/framework/{sessions,views,cache,testing} storage/logs bootstrap/cache
