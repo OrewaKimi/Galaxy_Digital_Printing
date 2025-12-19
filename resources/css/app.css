@@ -8,64 +8,186 @@
 @layer base {
   body {
     font-family: 'Poppins', sans-serif;
-    @apply bg-white text-black;
+    background-color: white;
+    color: black;
   }
 
   html {
     scroll-behavior: smooth;
   }
-}
 
-::selection {
-  @apply bg-black text-white;
-}
+  ::selection {
+    background-color: black;
+    color: white;
+  }
 
-::-moz-selection {
-  @apply bg-black text-white;
+  ::-moz-selection {
+    background-color: black;
+    color: white;
+  }
 }
 
 /* ========================= */
 /* Buttons */
 /* ========================= */
-.btn-primary {
-  @apply bg-black text-white px-6 py-3 rounded-lg font-semibold inline-block text-center transition duration-200 ease-in-out;
+@layer components {
+  .btn-primary {
+    @apply bg-black text-white px-6 py-3 rounded-lg font-semibold inline-block text-center transition-all duration-200;
+  }
+
+  .btn-primary:hover {
+    @apply bg-neutral-900 shadow-lg -translate-y-0.5;
+  }
+
+  .btn-secondary {
+    @apply border-2 border-black text-black px-6 py-3 rounded-lg font-semibold inline-block text-center transition-all duration-200;
+  }
+
+  .btn-secondary:hover {
+    @apply bg-black text-white shadow-lg -translate-y-0.5;
+  }
+
+  .card-hover {
+    @apply transition-all duration-300;
+  }
+
+  .card-hover:hover {
+    @apply -translate-y-2 shadow-xl;
+  }
+
+  .spinner {
+    @apply w-10 h-10 border-4 border-gray-200 border-t-black rounded-full animate-spin;
+  }
+
+  .badge {
+    @apply inline-block px-3 py-1 rounded-full text-sm font-semibold;
+  }
+
+  .badge-primary {
+    @apply bg-black text-white;
+  }
+
+  .badge-secondary {
+    @apply bg-gray-100 text-black;
+  }
+
+  .alert {
+    @apply p-4 rounded-lg mb-4 border-2;
+  }
+
+  .alert-success {
+    @apply bg-green-50 border-green-500 text-green-800;
+  }
+
+  .alert-error {
+    @apply bg-red-50 border-red-500 text-red-800;
+  }
+
+  .alert-warning {
+    @apply bg-yellow-50 border-yellow-500 text-yellow-800;
+  }
+
+  .alert-info {
+    @apply bg-blue-50 border-blue-500 text-blue-800;
+  }
+
+  .table-custom {
+    @apply w-full border-collapse;
+  }
+
+  .table-custom th {
+    @apply bg-black text-white px-4 py-3 text-left font-semibold;
+  }
+
+  .table-custom td {
+    @apply px-4 py-3 border-b border-gray-200;
+  }
+
+  .table-custom tbody tr:hover {
+    @apply bg-gray-50;
+  }
+
+  .pagination {
+    @apply flex gap-2 justify-center items-center;
+  }
+
+  .pagination a,
+  .pagination span {
+    @apply px-3 py-2 border-2 border-gray-200 rounded-md text-black transition-all duration-200;
+  }
+
+  .pagination a:hover {
+    @apply bg-black text-white border-black;
+  }
+
+  .pagination .active {
+    @apply bg-black text-white border-black;
+  }
+
+  .modal-overlay {
+    @apply fixed inset-0 bg-black/50 flex items-center justify-center z-[9999];
+  }
+
+  .modal-content {
+    @apply bg-white rounded-lg p-8 max-w-[90%] max-h-[90vh] overflow-y-auto shadow-xl;
+  }
+
+  .dropdown-menu {
+    @apply absolute bg-white border-2 border-gray-200 rounded-lg shadow-lg z-50;
+  }
+
+  .dropdown-menu a {
+    @apply block px-4 py-3 text-black transition-all duration-200;
+  }
+
+  .dropdown-menu a:hover {
+    @apply bg-gray-100;
+  }
+
+  .status-pending {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+
+  .status-processing {
+    @apply bg-blue-100 text-blue-800;
+  }
+
+  .status-completed {
+    @apply bg-green-100 text-green-800;
+  }
+
+  .status-cancelled {
+    @apply bg-red-100 text-red-800;
+  }
+
+  .progress-bar {
+    @apply w-full h-2 bg-gray-200 rounded-full overflow-hidden;
+  }
+
+  .progress-bar-fill {
+    @apply h-full bg-black transition-all duration-300;
+  }
+
+  .file-upload {
+    @apply border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer transition-all duration-200;
+  }
+
+  .file-upload:hover {
+    @apply border-black bg-gray-50;
+  }
+
+  .fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+  }
 }
 
-.btn-primary:hover {
-  @apply bg-neutral-900 -translate-y-0.5 shadow-lg;
+/* Skeleton */
+.skeleton {
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s ease-in-out infinite;
 }
 
-.btn-secondary {
-  @apply border-2 border-black text-black px-6 py-3 rounded-lg font-semibold inline-block text-center transition duration-200 ease-in-out;
-}
-
-.btn-secondary:hover {
-  @apply bg-black text-white -translate-y-0.5 shadow-lg;
-}
-
-/* ========================= */
-/* Scrollbar */
-/* ========================= */
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-track {
-  @apply bg-gray-100;
-}
-
-::-webkit-scrollbar-thumb {
-  @apply bg-black rounded-md;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  @apply bg-gray-800;
-}
-
-/* ========================= */
-/* Animations */
-/* ========================= */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -77,169 +199,35 @@
   }
 }
 
-.fade-in {
-  animation: fadeIn 0.5s ease-in-out;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* ========================= */
-/* Components */
-/* ========================= */
-.card-hover {
-  @apply transition duration-300 ease-in-out;
-}
-
-.card-hover:hover {
-  @apply -translate-y-2 shadow-xl;
-}
-
-.spinner {
-  @apply w-10 h-10 border-4 border-gray-200 border-t-black rounded-full animate-spin;
-}
-
-.badge {
-  @apply inline-block px-3 py-1 rounded-full text-sm font-semibold;
-}
-
-.badge-primary {
-  @apply bg-black text-white;
-}
-
-.badge-secondary {
-  @apply bg-gray-100 text-black;
-}
-
-/* Alerts */
-.alert {
-  @apply p-4 rounded-lg mb-4 border-2;
-}
-
-.alert-success {
-  @apply bg-green-50 border-green-500 text-green-800;
-}
-
-.alert-error {
-  @apply bg-red-50 border-red-500 text-red-800;
-}
-
-.alert-warning {
-  @apply bg-yellow-50 border-yellow-500 text-yellow-800;
-}
-
-.alert-info {
-  @apply bg-blue-50 border-blue-500 text-blue-800;
-}
-
-/* Table */
-.table-custom {
-  @apply w-full border-collapse;
-}
-
-.table-custom th {
-  @apply bg-black text-white px-4 py-3 text-left font-semibold;
-}
-
-.table-custom td {
-  @apply px-4 py-3 border-b border-gray-200;
-}
-
-.table-custom tbody tr:hover {
-  @apply bg-gray-50;
-}
-
-/* Pagination */
-.pagination {
-  @apply flex gap-2 justify-center items-center;
-}
-
-.pagination a,
-.pagination span {
-  @apply px-3 py-2 border-2 border-gray-200 rounded-md text-black transition duration-200;
-}
-
-.pagination a:hover {
-  @apply bg-black text-white border-black;
-}
-
-.pagination .active {
-  @apply bg-black text-white border-black;
-}
-
-/* Modal */
-.modal-overlay {
-  @apply fixed inset-0 bg-black/50 flex items-center justify-center z-[9999];
-}
-
-.modal-content {
-  @apply bg-white rounded-lg p-8 max-w-[90%] max-h-[90vh] overflow-y-auto shadow-xl;
-}
-
-/* Dropdown */
-.dropdown-menu {
-  @apply absolute bg-white border-2 border-gray-200 rounded-lg shadow-lg z-50;
-}
-
-.dropdown-menu a {
-  @apply block px-4 py-3 text-black transition duration-200;
-}
-
-.dropdown-menu a:hover {
-  @apply bg-gray-100;
-}
-
-/* Status Badges */
-.status-pending {
-  @apply bg-yellow-100 text-yellow-800;
-}
-
-.status-processing {
-  @apply bg-blue-100 text-blue-800;
-}
-
-.status-completed {
-  @apply bg-green-100 text-green-800;
-}
-
-.status-cancelled {
-  @apply bg-red-100 text-red-800;
-}
-
-/* Progress Bar */
-.progress-bar {
-  @apply w-full h-2 bg-gray-200 rounded-full overflow-hidden;
-}
-
-.progress-bar-fill {
-  @apply h-full bg-black transition-all duration-300;
-}
-
-/* File Upload */
-.file-upload {
-  @apply border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer transition duration-200;
-}
-
-.file-upload:hover {
-  @apply border-black bg-gray-50;
-}
-
-/* Skeleton */
-.skeleton {
-  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
-  background-size: 200% 100%;
-  animation: loading 1.5s ease-in-out infinite;
-}
-
 @keyframes loading {
   0% {
     background-position: 200% 0;
   }
   100% {
     background-position: -200% 0;
+  }
+}
+
+/* ========================= */
+/* Scrollbar */
+/* ========================= */
+@layer utilities {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background-color: #f3f4f6;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: black;
+    border-radius: 0.375rem;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: #1f2937;
   }
 }
 
@@ -263,12 +251,14 @@
   }
 
   body {
-    @apply bg-white;
+    background-color: white;
   }
 
   .btn-primary,
   .btn-secondary {
-    @apply border border-black bg-transparent text-black !important;
+    border: 1px solid black;
+    background-color: transparent !important;
+    color: black !important;
   }
 }
 
