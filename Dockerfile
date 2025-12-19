@@ -21,8 +21,7 @@ COPY . .
 RUN composer install --optimize-autoloader --no-interaction
 
 # Install node dependencies
-RUN npm ci && npm prune --omit=dev
-
+    RUN npm install && npm prune --omit=dev
 # Build assets
 RUN npm run build
 
