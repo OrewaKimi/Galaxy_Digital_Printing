@@ -7,12 +7,13 @@
 /* ========================= */
 @layer base {
   body {
-    @apply font-poppins bg-white text-black;
+    font-family: 'Poppins', sans-serif;
+    @apply bg-white text-black;
   }
-}
 
-html {
-  scroll-behavior: smooth;
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
 ::selection {
