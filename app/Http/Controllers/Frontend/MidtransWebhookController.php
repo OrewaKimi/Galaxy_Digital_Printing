@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Midtrans\Notification;
+use Midtrans\Config;
 
 class MidtransWebhookController extends Controller
 {
@@ -30,16 +31,23 @@ class MidtransWebhookController extends Controller
             Log::info("=== Midtrans Webhook Start ($requestId) ===");
             Log::info('Raw Request Data:', $request->all());
 
-            // Step 1: Verifikasi request dari Midtrans
-            $this->verifySignature($request);
+            // Initialize Midtrans Config
+            Config::$serverKey = config('midtrans.server_key');
+            Config::$clientKey = config('midtrans.client_key');
+            Config::$isProduction = config('midtrans.is_production');
 
-            // Step 2: Parse notifikasi dari Midtrans
+            Log::info('Midtrans config initialized', [
+                'isProduction' => Config::$isProduction,
+                'serverKey' => substr(Config::$serverKey, 0, 10) . '...',
+            ]);
+
+            // Step 1: Parse notifikasi dari Midtrans
             $notification = new Notification();
             $parsedData = $this->parseNotification($notification);
 
             Log::info("Parsed Notification ($requestId):", $parsedData);
 
-            // Step 3: Cari order di database
+            // Step 2: Cari order di database
             $order = Order::where('order_number', $parsedData['order_id'])->first();
             
             if (!$order) {
@@ -57,7 +65,7 @@ class MidtransWebhookController extends Controller
                 'current_status' => $order->notes ?? 'N/A',
             ]);
 
-            // Step 4: Process pembayaran berdasarkan transaction status
+            // Step 3: Process pembayaran berdasarkan transaction status
             $this->processPayment($order, $parsedData, $requestId);
 
             Log::info("=== Midtrans Webhook End ($requestId) - Success ===");
@@ -84,32 +92,6 @@ class MidtransWebhookController extends Controller
                 'message' => $e->getMessage(),
                 'request_id' => $requestId
             ], 500);
-        }
-    }
-
-    /**
-     * Verifikasi signature dari Midtrans
-     * Memastikan request benar-benar dari Midtrans, bukan dari pihak lain
-     * 
-     * Signature = SHA512(order_id + status_code + gross_amount + server_key)
-     */
-    private function verifySignature(Request $request)
-    {
-        try {
-            // Use Midtrans library built-in verification
-            $notification = new Notification();
-            
-            // If we got here, signature is already verified by Notification class
-            Log::info('Midtrans signature verified using Notification class', [
-                'order_id' => $request->input('order_id'),
-            ]);
-            
-        } catch (\Exception $e) {
-            Log::error('Signature verification failed', [
-                'message' => $e->getMessage(),
-                'order_id' => $request->input('order_id'),
-            ]);
-            throw $e;
         }
     }
 
