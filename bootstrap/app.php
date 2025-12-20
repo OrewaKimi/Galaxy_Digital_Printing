@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use App\Http\Middleware\CheckCloudAdminAuth;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -14,6 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             'payment/midtrans/callback',
             'midtrans/callback',
+        ]);
+        
+        $middleware->alias([
+            'check.cloud.admin' => CheckCloudAdminAuth::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

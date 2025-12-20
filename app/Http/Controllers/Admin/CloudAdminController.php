@@ -9,17 +9,6 @@ use Illuminate\Http\Request;
 
 class CloudAdminController extends Controller
 {
-    public function __construct()
-    {
-        // Simple password protection
-        $this->middleware(function ($request, $next) {
-            if ($request->session()->get('admin_auth') !== true) {
-                return redirect()->route('cloud-admin.login');
-            }
-            return $next($request);
-        })->except(['login', 'postLogin']);
-    }
-
     public function login()
     {
         return view('admin.cloud-login');

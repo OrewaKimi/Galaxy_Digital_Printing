@@ -111,6 +111,9 @@ if (app()->isLocal()) {
 Route::prefix('cloud-admin')->name('cloud-admin.')->group(function () {
     Route::get('/login', [CloudAdminController::class, 'login'])->name('login');
     Route::post('/login', [CloudAdminController::class, 'postLogin'])->name('post-login');
-    Route::get('/dashboard', [CloudAdminController::class, 'dashboard'])->name('dashboard');
-    Route::post('/logout', [CloudAdminController::class, 'logout'])->name('logout');
+    
+    Route::middleware('check.cloud.admin')->group(function () {
+        Route::get('/dashboard', [CloudAdminController::class, 'dashboard'])->name('dashboard');
+        Route::post('/logout', [CloudAdminController::class, 'logout'])->name('logout');
+    });
 });
