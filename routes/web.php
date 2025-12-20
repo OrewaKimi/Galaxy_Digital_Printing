@@ -30,6 +30,8 @@ use App\Http\Controllers\PapanTandaController;
 use App\Http\Controllers\KartuNamaController;
 use App\Http\Controllers\GoogleController;
 use App\Http\Controllers\KartuUcapanController;
+use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Admin\CloudAdminController;
 
 /*
