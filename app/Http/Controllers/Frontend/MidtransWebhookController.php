@@ -216,9 +216,16 @@ class MidtransWebhookController extends Controller
             
             $paymentMethod = $methodMap[$paymentType] ?? 'other';
 
+            // Find Payment Confirmed status
+            $paymentConfirmedStatus = \App\Models\OrderStatus::where('status_code', 'PAYMENT_CONFIRMED')->first();
+            if (!$paymentConfirmedStatus) {
+                Log::error('Payment Confirmed status not found', ['order_id' => $order->order_id]);
+                throw new \Exception('Payment Confirmed status not found in database');
+            }
+
             // 1. Update order
             $order->update([
-                'status_id' => 2, // Status "Pembayaran Diterima" - sesuaikan dengan enum kamu
+                'status_id' => $paymentConfirmedStatus->status_id,
                 'paid_amount' => $order->total_price,
                 'remaining_amount' => 0,
                 'notes' => "Pembayaran berhasil via Midtrans ($paymentType) pada " . now()->format('d/m/Y H:i:s'),
@@ -226,6 +233,7 @@ class MidtransWebhookController extends Controller
 
             Log::info('Order updated for payment success', [
                 'order_id' => $order->order_id,
+                'status_id' => $paymentConfirmedStatus->status_id,
                 'paid_amount' => $order->paid_amount,
                 'remaining_amount' => $order->remaining_amount,
             ]);
