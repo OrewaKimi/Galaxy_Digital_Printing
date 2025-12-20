@@ -107,6 +107,14 @@ if (app()->isLocal()) {
         Route::get('/orders/{orderNumber}', [MidtransTestController::class, 'checkOrder'])->name('order');
     });
 }
+
+// Debug Routes (Temporary - untuk troubleshooting)
+Route::prefix('debug')->name('debug.')->group(function () {
+    Route::get('/statuses', [\App\Http\Controllers\DebugController::class, 'checkStatuses'])->name('statuses');
+    Route::get('/payment-types', [\App\Http\Controllers\DebugController::class, 'checkPaymentTypes'])->name('payment-types');
+    Route::get('/orders', [\App\Http\Controllers\DebugController::class, 'checkOrders'])->name('orders');
+});
+
 // Cloud Admin Routes (Web Production)
 Route::prefix('cloud-admin')->name('cloud-admin.')->group(function () {
     Route::get('/login', [CloudAdminController::class, 'login'])->name('login');
