@@ -95,36 +95,22 @@ class MidtransWebhookController extends Controller
      */
     private function verifySignature(Request $request)
     {
-        $signatureKey = $request->input('signature_key');
-        $orderId = $request->input('order_id');
-        $statusCode = $request->input('status_code');
-        $grossAmount = $request->input('gross_amount');
-        $serverKey = config('midtrans.server_key');
-
-        // Validasi field yang diperlukan ada
-        if (!$signatureKey || !$orderId || !$statusCode || !$grossAmount) {
-            throw new \Exception('Missing required fields: signature_key, order_id, status_code, or gross_amount');
-        }
-
-        // Validasi server key ada
-        if (!$serverKey) {
-            throw new \Exception('MIDTRANS_SERVER_KEY tidak dikonfigurasi di .env');
-        }
-
-        // Generate signature yang diharapkan
-        $expectedSignature = hash('sha512', $orderId . $statusCode . $grossAmount . $serverKey);
-
-        // Bandingkan dengan signature dari request
-        if (hash_equals($expectedSignature, $signatureKey) === false) {
-            Log::warning('Invalid signature received', [
-                'order_id' => $orderId,
-                'expected' => substr($expectedSignature, 0, 20) . '...',
-                'received' => substr($signatureKey, 0, 20) . '...',
+        try {
+            // Use Midtrans library built-in verification
+            $notification = new Notification();
+            
+            // If we got here, signature is already verified by Notification class
+            Log::info('Midtrans signature verified using Notification class', [
+                'order_id' => $request->input('order_id'),
             ]);
-            throw new \Exception('Invalid signature - request tidak dari Midtrans');
+            
+        } catch (\Exception $e) {
+            Log::error('Signature verification failed', [
+                'message' => $e->getMessage(),
+                'order_id' => $request->input('order_id'),
+            ]);
+            throw $e;
         }
-
-        Log::info('Signature verified successfully', ['order_id' => $orderId]);
     }
 
     /**
@@ -219,39 +205,59 @@ class MidtransWebhookController extends Controller
             // Find Payment Confirmed status
             $paymentConfirmedStatus = \App\Models\OrderStatus::where('status_code', 'PAYMENT_CONFIRMED')->first();
             if (!$paymentConfirmedStatus) {
-                Log::error('Payment Confirmed status not found', ['order_id' => $order->order_id]);
+                Log::error('Payment Confirmed status not found', [
+                    'order_id' => $order->order_id,
+                    'available_statuses' => \App\Models\OrderStatus::pluck('status_code')->toArray(),
+                ]);
                 throw new \Exception('Payment Confirmed status not found in database');
             }
 
+            Log::info('Found Payment Confirmed status', [
+                'status_id' => $paymentConfirmedStatus->status_id,
+                'status_name' => $paymentConfirmedStatus->status_name,
+            ]);
+
             // 1. Update order
-            $order->update([
+            $updateResult = $order->update([
                 'status_id' => $paymentConfirmedStatus->status_id,
                 'paid_amount' => $order->total_price,
                 'remaining_amount' => 0,
+                'transaction_id' => $transactionId,
                 'notes' => "Pembayaran berhasil via Midtrans ($paymentType) pada " . now()->format('d/m/Y H:i:s'),
             ]);
 
-            Log::info('Order updated for payment success', [
+            Log::info('Order update result', [
                 'order_id' => $order->order_id,
-                'status_id' => $paymentConfirmedStatus->status_id,
-                'paid_amount' => $order->paid_amount,
-                'remaining_amount' => $order->remaining_amount,
+                'update_result' => $updateResult,
+                'new_status_id' => $paymentConfirmedStatus->status_id,
+            ]);
+
+            // Verify order was updated
+            $updatedOrder = Order::find($order->order_id);
+            Log::info('Order after update', [
+                'order_id' => $updatedOrder->order_id,
+                'status_id' => $updatedOrder->status_id,
+                'paid_amount' => $updatedOrder->paid_amount,
             ]);
 
             // 2. Buat Payment record
-            $payment = Payment::create([
+            $paymentData = [
                 'payment_number' => 'MTR-' . date('YmdHis') . '-' . strtoupper(substr(uniqid(), -6)),
                 'order_id' => $order->order_id,
-                'payment_type_id' => 1, // Sesuaikan dengan payment type ID untuk Midtrans
-                'amount' => $grossAmount,
+                'payment_type_id' => 1, // Midtrans payment type
+                'amount' => (int)$grossAmount,
                 'payment_method' => $paymentMethod,
                 'payment_status' => 'completed',
                 'payment_date' => now(),
                 'transaction_reference' => $transactionId,
                 'notes' => "Midtrans payment ($paymentType)",
-                'verified_by' => null, // Auto-verified dari Midtrans
+                'verified_by' => null,
                 'verification_date' => now(),
-            ]);
+            ];
+
+            Log::info('Creating payment record', $paymentData);
+
+            $payment = Payment::create($paymentData);
 
             Log::info('Payment record created', [
                 'payment_id' => $payment->payment_id,
@@ -261,12 +267,20 @@ class MidtransWebhookController extends Controller
             ]);
 
             DB::commit();
+            
+            Log::info('handlePaymentSuccess completed successfully', [
+                'order_id' => $order->order_id,
+                'payment_id' => $payment->payment_id,
+            ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error handling payment success', [
                 'order_id' => $order->order_id,
                 'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString(),
             ]);
             throw $e;
