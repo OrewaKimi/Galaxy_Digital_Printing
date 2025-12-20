@@ -114,6 +114,7 @@ Route::prefix('debug')->name('debug.')->group(function () {
     Route::get('/payment-types', [\App\Http\Controllers\DebugController::class, 'checkPaymentTypes'])->name('payment-types');
     Route::get('/orders', [\App\Http\Controllers\DebugController::class, 'checkOrders'])->name('orders');
     Route::get('/seed', [\App\Http\Controllers\SeedDatabaseController::class, 'seed'])->name('seed');
+    Route::get('/insert-payment-types', [\App\Http\Controllers\SeedDatabaseController::class, 'insertPaymentTypes'])->name('insert-payment-types');
 });
 
 // Cloud Admin Routes (Web Production)

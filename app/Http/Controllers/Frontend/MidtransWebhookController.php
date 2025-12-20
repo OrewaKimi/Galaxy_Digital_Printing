@@ -239,20 +239,36 @@ class MidtransWebhookController extends Controller
 
             Log::info('Creating payment record', $paymentData);
 
-            $payment = Payment::create($paymentData);
+            // Check if payment_type_id 1 exists, if not use any available
+            $paymentTypeExists = \App\Models\PaymentType::where('payment_type_id', 1)->exists();
+            if (!$paymentTypeExists) {
+                $firstPaymentType = \App\Models\PaymentType::first();
+                if ($firstPaymentType) {
+                    $paymentData['payment_type_id'] = $firstPaymentType->payment_type_id;
+                    Log::warning('PaymentType id=1 not found, using id=' . $firstPaymentType->payment_type_id);
+                } else {
+                    // Jika tidak ada payment type sama sekali, skip create payment record
+                    Log::warning('No payment types found in database, skipping payment record creation');
+                    $paymentData = null;
+                }
+            }
 
-            Log::info('Payment record created', [
-                'payment_id' => $payment->payment_id,
-                'payment_number' => $payment->payment_number,
-                'amount' => $payment->amount,
-                'transaction_reference' => $transactionId,
-            ]);
+            if ($paymentData) {
+                $payment = Payment::create($paymentData);
+
+                Log::info('Payment record created', [
+                    'payment_id' => $payment->payment_id,
+                    'payment_number' => $payment->payment_number,
+                    'amount' => $payment->amount,
+                    'transaction_reference' => $transactionId,
+                ]);
+            }
 
             DB::commit();
             
             Log::info('handlePaymentSuccess completed successfully', [
                 'order_id' => $order->order_id,
-                'payment_id' => $payment->payment_id,
+                'payment_created' => $paymentData !== null,
             ]);
 
         } catch (\Exception $e) {
