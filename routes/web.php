@@ -30,8 +30,7 @@ use App\Http\Controllers\PapanTandaController;
 use App\Http\Controllers\KartuNamaController;
 use App\Http\Controllers\GoogleController;
 use App\Http\Controllers\KartuUcapanController;
-use App\Http\Controllers\Auth\AuthController;
-use App\Http\Controllers\Auth\LogoutController;
+use App\Http\Controllers\Admin\CloudAdminController;
 
 /*
 |--------------------------------------------------------------------------
@@ -106,3 +105,10 @@ if (app()->isLocal()) {
         Route::get('/orders/{orderNumber}', [MidtransTestController::class, 'checkOrder'])->name('order');
     });
 }
+// Cloud Admin Routes (Web Production)
+Route::prefix('cloud-admin')->name('cloud-admin.')->group(function () {
+    Route::get('/login', [CloudAdminController::class, 'login'])->name('login');
+    Route::post('/login', [CloudAdminController::class, 'postLogin'])->name('post-login');
+    Route::get('/dashboard', [CloudAdminController::class, 'dashboard'])->name('dashboard');
+    Route::post('/logout', [CloudAdminController::class, 'logout'])->name('logout');
+});
