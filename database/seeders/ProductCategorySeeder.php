@@ -66,6 +66,11 @@ class ProductCategorySeeder extends Seeder
                 'description' => 'Kalender dinding dan meja',
                 'is_active' => true,
             ],
+            [
+                'category_name' => 'Spanduk & Banner',
+                'description' => 'Spanduk, banner dan x-banner',
+                'is_active' => true,
+            ],
         ];
 
         foreach ($categories as $category) {

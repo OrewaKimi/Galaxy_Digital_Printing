@@ -11,10 +11,17 @@ class HomeController extends Controller
 {
     public function index()
     {
+        // Tampilkan hanya produk pilihan di homepage
+        $productNames = [
+            'X-Banner 60x160 cm',
+            'Kartu Nama Premium',
+            'Sticker Cutting Vinyl',
+            'Spanduk Vinyl 340 gsm'
+        ];
+        
         $products = Product::with('category')
             ->where('is_active', true)
-            ->latest()
-            ->limit(12)
+            ->whereIn('product_name', $productNames)
             ->get();
         
         return view('frontend.home', compact('products'));

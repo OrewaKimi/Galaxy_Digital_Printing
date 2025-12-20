@@ -130,6 +130,16 @@ class ProductSeeder extends Seeder
                 ]
             );
             Product::firstOrCreate(
+                ['product_name' => 'Kartu Nama Premium'],
+                [
+                    'category_id' => $kartuNama->category_id,
+                    'base_price' => 150000,
+                    'description' => 'Kartu nama premium dengan finishing khusus',
+                    'unit' => 'pcs',
+                    'is_active' => true,
+                ]
+            );
+            Product::firstOrCreate(
                 ['product_name' => 'Kartu Ucapan'],
                 [
                     'category_id' => $kartuNama->category_id,
@@ -170,12 +180,12 @@ class ProductSeeder extends Seeder
         $stiker = ProductCategory::where('category_name', 'Stiker')->first();
         if ($stiker) {
             Product::firstOrCreate(
-                ['product_name' => 'Stiker Vinyl'],
+                ['product_name' => 'Sticker Cutting Vinyl'],
                 [
                     'category_id' => $stiker->category_id,
-                    'base_price' => 8000,
-                    'description' => 'Stiker vinyl custom',
-                    'unit' => 'pcs',
+                    'base_price' => 75000,
+                    'description' => 'Stiker cutting vinyl custom',
+                    'unit' => 'm²',
                     'is_active' => true,
                 ]
             );
@@ -251,6 +261,31 @@ class ProductSeeder extends Seeder
                     'base_price' => 35000,
                     'description' => 'Kalender meja custom',
                     'unit' => 'pcs',
+                    'is_active' => true,
+                ]
+            );
+        }
+
+        // Spanduk & Banner
+        $banner = ProductCategory::where('category_name', 'Spanduk & Banner')->first();
+        if ($banner) {
+            Product::firstOrCreate(
+                ['product_name' => 'X-Banner 60x160 cm'],
+                [
+                    'category_id' => $banner->category_id,
+                    'base_price' => 120000,
+                    'description' => 'X-Banner ukuran 60x160 cm',
+                    'unit' => 'pcs',
+                    'is_active' => true,
+                ]
+            );
+            Product::firstOrCreate(
+                ['product_name' => 'Spanduk Vinyl 340 gsm'],
+                [
+                    'category_id' => $banner->category_id,
+                    'base_price' => 50000,
+                    'description' => 'Spanduk vinyl 340 gsm',
+                    'unit' => 'm²',
                     'is_active' => true,
                 ]
             );
